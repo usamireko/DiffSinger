@@ -1,7 +1,7 @@
 import torch
 from torch import nn
 
-from lib.conf.schema import LinguisticEncoderConfig, MelodyEncoderConfig
+from lib.config.schema import LinguisticEncoderConfig, MelodyEncoderConfig
 from utils import filter_kwargs
 from .commons.common_layers import (
     NormalInitEmbedding as Embedding,

@@ -7,7 +7,7 @@ import librosa
 import numpy
 import scipy
 
-from lib.conf.schema import DataSourceConfig, DataConfig
+from lib.config.schema import DataSourceConfig, DataConfig
 from lib.feature.pitch import interp_f0
 from utils.plot import distribution_to_figure
 from .binarizer_base import MetadataItem, BaseBinarizer, DataSample

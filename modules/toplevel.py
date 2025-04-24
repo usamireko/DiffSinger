@@ -1,6 +1,6 @@
 import torch.nn as nn
 
-from lib.conf.schema import ModelConfig
+from lib.config.schema import ModelConfig
 from .commons.common_layers import (
     NormalInitEmbedding as Embedding,
     XavierUniformInitLinear as Linear,

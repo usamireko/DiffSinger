@@ -3,7 +3,7 @@ from dataclasses import dataclass
 import torch
 from torch import nn
 
-from lib.conf.schema import DiffusionDecoderConfig
+from lib.config.schema import DiffusionDecoderConfig
 from utils import filter_kwargs
 from .aux_decoder import ConvNeXtDecoder
 from .backbone import WaveNet, LYNXNet

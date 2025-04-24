@@ -2,8 +2,8 @@ from typing import Any, List, Optional, Tuple
 
 from pydantic import BaseModel
 
-from lib.conf.io import load_raw_config
-from lib.conf.schema import ConfigurationScope, RootConfig
+from lib.config.io import load_raw_config
+from lib.config.schema import ConfigurationScope, RootConfig
 
 
 class ModelFormatter:

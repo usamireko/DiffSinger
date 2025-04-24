@@ -7,7 +7,7 @@ import librosa
 import numpy
 import torch
 
-from lib.conf.schema import DataSourceConfig
+from lib.config.schema import DataSourceConfig
 from preprocessing.binarizer_base import MetadataItem, BaseBinarizer, DataSample
 from lib.feature.pitch import interp_f0
 

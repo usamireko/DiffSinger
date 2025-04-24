@@ -1,7 +1,7 @@
 import torch
 from torch import nn
 
-from lib.conf.schema import EmbeddingsConfig
+from lib.config.schema import EmbeddingsConfig
 from .commons.common_layers import XavierUniformInitLinear as Linear
 
 __all__ = [

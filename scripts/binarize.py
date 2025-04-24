@@ -9,9 +9,9 @@ sys.path.insert(0, str(root_dir))
 import click
 import dask
 
-from lib.conf.formatter import ModelFormatter
-from lib.conf.io import load_raw_config
-from lib.conf.schema import RootConfig, DataConfig, BinarizerConfig, ConfigurationScope
+from lib.config.formatter import ModelFormatter
+from lib.config.io import load_raw_config
+from lib.config.schema import RootConfig, DataConfig, BinarizerConfig, ConfigurationScope
 
 dask.config.set(scheduler="synchronous")
 

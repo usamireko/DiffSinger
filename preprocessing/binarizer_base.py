@@ -8,8 +8,8 @@ import numpy
 import torch
 import tqdm
 
-from lib.conf.schema import DataConfig, BinarizerConfig
-from lib.conf.schema import DataSourceConfig
+from lib.config.schema import DataConfig, BinarizerConfig
+from lib.config.schema import DataSourceConfig
 from lib.feature import get_energy, get_tension, SinusoidalSmoothingConv1d
 from lib.feature.pitch import get_pitch_parselmouth, get_pitch_harvest
 from lib.feature.decomposition import (

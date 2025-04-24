@@ -7,7 +7,7 @@ from dataclasses import dataclass
 import dask
 import numpy
 
-from lib.conf.schema import DataSourceConfig
+from lib.config.schema import DataSourceConfig
 from .binarizer_base import MetadataItem, BaseBinarizer, DataSample
 
 ACOUSTIC_ITEM_ATTRIBUTES = [
