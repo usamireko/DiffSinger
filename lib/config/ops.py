@@ -1,6 +1,5 @@
 import abc
 import re
-from typing import List, Union, Callable
 
 from pydantic import BaseModel
 
@@ -9,7 +8,7 @@ KEY_PATH_OTHER = re.compile(r"\.([^.[]*)|\[(.*?)]")
 
 
 # This function is adapted from omegaconf._utils
-def split_path(key: str) -> List[str]:
+def split_path(key: str) -> list[str]:
     """
     Split a full key path into its individual components.
 
@@ -44,7 +43,7 @@ def split_path(key: str) -> List[str]:
 
 
 class ConfigOperationContext:
-    def __init__(self, root: BaseModel, current_path: List[Union[str, int]], current_value, scope: int):
+    def __init__(self, root: BaseModel, current_path: list[str | int], current_value, scope: int):
         self.root = root
         self.current_path = current_path
         self.current_value = current_value
@@ -551,7 +550,7 @@ def filter_(iterable, f):
     return FilterOperation(iterable, f)
 
 
-def func(f: Callable, *args):
+def func(f: callable, *args):
     """
     Create a custom function operation.
     :param f: the function to call.

@@ -2,8 +2,9 @@ from typing import Any, List, Optional, Tuple
 
 from pydantic import BaseModel
 
-from lib.config.io import load_raw_config
-from lib.config.schema import ConfigurationScope, RootConfig
+__all__ = [
+    "ModelFormatter",
+]
 
 
 class ModelFormatter:
@@ -125,20 +126,3 @@ class ModelFormatter:
         result = "\n".join(ln.rstrip() for ln in self.lines)
         self.reset()
         return result
-
-
-def main(path, scope):
-    # Example usage
-    config = load_raw_config(path)
-    config = RootConfig.model_validate(config, scope=scope)
-    config.resolve(scope_mask=scope)
-    config.check(scope_mask=scope)
-    formatter = ModelFormatter(line_width=120, indent=4)
-    formatted_str = formatter.format(config)
-    print(formatted_str)
-
-
-if __name__ == '__main__':
-    # Example usage
-    main("configs/acoustic_v3.yaml", ConfigurationScope.ACOUSTIC)
-    main("configs/variance_v3.yaml", ConfigurationScope.VARIANCE)

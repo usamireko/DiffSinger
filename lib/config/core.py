@@ -1,7 +1,13 @@
 from contextvars import ContextVar
-from typing import Any, Optional, ClassVar
+from typing import Any, ClassVar
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, model_validator
+
+from .ops import ConfigOperationContext, ConfigOperationBase, split_path
+
+__all__ = [
+    "ConfigBaseModel",
+]
 
 # Context variable holds current scope
 _current_scope: ContextVar[int] = ContextVar("_current_scope")
@@ -54,69 +60,103 @@ class ConfigBaseModel(BaseModel):
                 delattr(self, name)
         return self
 
+    def _resolve_recursive(self, current: "ConfigBaseModel", context: ConfigOperationContext):
+        """
+        Recursively resolve all dynamic expressions in the config.
+        :param current: The current model instance.
+        :param context: The context for resolving dynamic expressions.
+        """
+        for field_name, field_info in type(current).model_fields.items():
+            field_scope = current.__field_scopes__.get(field_name)
+            if field_scope is not None and not field_scope & context.scope:
+                continue
+            context.current_path.append(field_name)
+            value = getattr(current, field_name)
+            if isinstance(value, ConfigBaseModel):
+                self._resolve_recursive(value, context)
+            elif isinstance(value, list):
+                for i, item in enumerate(value):
+                    context.current_path.append(i)
+                    if isinstance(item, ConfigBaseModel):
+                        self._resolve_recursive(item, context)
+                    context.current_path.pop()
+            if field_info.json_schema_extra is not None:
+                expr = field_info.json_schema_extra.get('dynamic_expr')
+                if expr:
+                    if isinstance(expr, ConfigOperationBase):
+                        context.current_value = value
+                        expr = expr.resolve(context)
+                    setattr(current, field_name, expr)
+            context.current_path.pop()
 
-if __name__ == '__main__':
-    # Example usage
-    # Scope definitions (bitmask flags)
-    SCOPE_A = 0x1  # 00000001
-    SCOPE_B = 0x2  # 00000010
-    SCOPE_C = 0x4  # 00000100
-    SCOPE_D = 0x8  # 00001000
-    # Additional scopes can be defined as powers of 2
+    def _check_recursive(self, current: "ConfigBaseModel", context: ConfigOperationContext):
+        """
+        Recursively check all dynamic expressions in the config.
+        :param current: The current model instance.
+        :param context: The context for checking dynamic expressions.
+        """
+        for field_name, field_info in type(current).model_fields.items():
+            field_scope = current.__field_scopes__.get(field_name)
+            if field_scope is not None and not field_scope & context.scope:
+                continue
+            context.current_path.append(field_name)
+            value = getattr(current, field_name)
+            if isinstance(value, ConfigBaseModel):
+                self._check_recursive(value, context)
+            elif isinstance(value, list):
+                for i, item in enumerate(value):
+                    context.current_path.append(i)
+                    if isinstance(item, ConfigBaseModel):
+                        self._check_recursive(item, context)
+                    context.current_path.pop()
+            if field_info.json_schema_extra is not None:
+                check = field_info.json_schema_extra.get('dynamic_check')
+                if check:
+                    context.current_value = value
+                    check.run(context)
+            context.current_path.pop()
 
-    class DatabaseConfig(ConfigBaseModel):
-        host: str
-
-        # Field only available in SCOPE_A
-        replica_set: Optional[str] = Field(
-            default=None,
-            json_schema_extra={"scope": SCOPE_A}
+    def _process_nested(self, f, scope: int = 0, path: str = None):
+        """
+        Process the nested config object under a given path.
+        :param f: The function to apply to the object.
+        :param scope: The scope mask.
+        :param path: Path of the object. None points to the root.
+        """
+        current = self
+        if path:
+            parts = split_path(path)
+            for p in parts:
+                if isinstance(current, (tuple, list)):
+                    current = current[int(p)]
+                elif isinstance(current, dict):
+                    current = current[p]
+                else:
+                    current = getattr(current, p)
+        else:
+            parts = []
+        if not isinstance(current, ConfigBaseModel):
+            return
+        context = ConfigOperationContext(
+            root=self,
+            current_path=parts,
+            current_value=current,
+            scope=scope
         )
+        f(current, context)
 
-        # Field available in both SCOPE_A and SCOPE_B
-        timeout: Optional[int] = Field(
-            default=30,
-            json_schema_extra={"scope": SCOPE_A | SCOPE_B}
-        )
+    def resolve(self, scope_mask: int = 0, from_path: str = None):
+        """
+        Resolve all dynamic expressions from a given path in the config.
+        :param scope_mask: The scope mask to use for dynamic resolving.
+        :param from_path: The path to resolve from. If None, resolve from the root.
+        """
+        self._process_nested(self._resolve_recursive, scope_mask, from_path)
 
-        # Nested config only for SCOPE_B
-        sharding: Optional["ShardingConfig"] = Field(
-            default=None,
-            json_schema_extra={"scope": SCOPE_B}
-        )
-
-
-    class ShardingConfig(ConfigBaseModel):
-        shard_key: str
-        clusters: int = Field(
-            default=3,
-            json_schema_extra={"scope": SCOPE_B | SCOPE_C}
-        )
-
-
-    # Creating configuration for SCOPE_A
-    config_a = DatabaseConfig.model_validate({
-        "host": "primary.db.example",
-        "replica_set": "rs0",
-        "timeout": 60,
-        "sharding": {  # This field will be ignored for SCOPE_A
-            "shard_key": "_id",
-            "clusters": 5
-        }
-    }, scope=SCOPE_A)
-    print(config_a.model_dump())
-    # Output: {'scope': 1, 'host': 'primary.db.example', 'replica_set': 'rs0', 'timeout': 60}
-
-    # Creating configuration for SCOPE_B
-    config_b = DatabaseConfig.model_validate({
-        "host": "cluster.db.example",
-        "replica_set": "ignored",  # Will be filtered out
-        "timeout": 45,
-        "sharding": {
-            "shard_key": "user_id",
-            "clusters": 5
-        }
-    }, scope=SCOPE_B)
-    print(config_b.model_dump())
-    # Output: {'scope': 2, 'host': 'cluster.db.example', 'timeout': 45,
-    #          'sharding': {'scope': 2, 'shard_key': 'user_id', 'clusters': 5}}
+    def check(self, scope_mask: int = 0, from_path: str = None):
+        """
+        Check all dynamic expressions from a given path in the config.
+        :param scope_mask: The scope mask to use for dynamic checking.
+        :param from_path: The path to check from. If None, check from the root.
+        """
+        self._process_nested(self._check_recursive, scope_mask, from_path)

@@ -1,10 +1,9 @@
 import pathlib
-from typing import List
 
 import omegaconf
 
 
-def load_raw_config(config_path: pathlib.Path, overrides: List[str] = None) -> dict:
+def load_raw_config(config_path: pathlib.Path, overrides: list[str] = None) -> dict:
     def _load(path: pathlib.Path) -> omegaconf.DictConfig:
         cfg = omegaconf.OmegaConf.load(path)
 
