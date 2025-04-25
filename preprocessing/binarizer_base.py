@@ -160,6 +160,11 @@ class BaseBinarizer(abc.ABC):
                     f"item '{{}}', duration '{dur}'"
                 )
             ph_dur.append(dur_float)
+        if len(ph_seq) == 0:
+            return False, (
+                "Empty phoneme sequence found in raw dataset '{}':\n"
+                f"item '{{}}'"
+            )
         if len(ph_seq) != len(ph_dur):
             raise ValueError(
                 "Unaligned ph_seq and ph_dur found in raw dataset '{}':\n"

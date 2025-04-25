@@ -105,6 +105,11 @@ class VarianceBinarizer(BaseBinarizer):
                             f"item '{item_name}', duration '{dur}'"
                         )
                     note_dur.append(dur_float)
+                if len(note_midi) == 0:
+                    raise ValueError(
+                        f"Empty note sequence found in raw dataset '{raw_data_dir.as_posix()}':\n"
+                        f"item '{item_name}'"
+                    )
                 if len(note_midi) != len(note_dur):
                     raise ValueError(
                         f"Unaligned note_seq and note_dur found in raw dataset '{raw_data_dir.as_posix()}':\n"
@@ -115,7 +120,7 @@ class VarianceBinarizer(BaseBinarizer):
                     note_glide = [0] * len(note_glide)
                 else:
                     note_glide = [self.glide_map[g] for g in note_glide.split()]
-                    if len(note_glide) != len(note_glide):
+                    if len(note_glide) != len(note_midi):
                         raise ValueError(
                             f"Unaligned note_seq and note_glide found in raw dataset '{raw_data_dir.as_posix()}':\n"
                             f"item '{item_name}', note_seq length {len(note_midi)}, note_glide length {len(note_glide)}"
