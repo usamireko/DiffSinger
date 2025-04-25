@@ -74,7 +74,7 @@ class DiffusionDecoder(nn.Module):
             diff_sample_pred = self.normalizer.denorm(diff_out)
             return ShallowDiffusionOutput(aux_out=aux_sample_pred, diff_out=diff_sample_pred)
         else:
-            if self.normalizer.num_features == 1:
+            if self.normalizer.squeezed_feature_dim:
                 sample_gt = [sample_gt]
             norm_gt = self.normalizer.norm(*sample_gt)
             diff_out = self.decoder(condition, x_gt=norm_gt, infer=infer)

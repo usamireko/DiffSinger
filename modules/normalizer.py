@@ -9,7 +9,7 @@ __all__ = [
 class FeatureNormalizer(nn.Module):
     def __init__(
             self, num_channels: int, num_features: int = 1, num_repeats: int = None,
-            squeezed_channel_dim: bool = False,
+            squeeze_channel_dim: bool = False, squeeze_feature_dim: bool = False,
             norm_mins: list[float] = None, norm_maxs: list[float] = None,
             clip_mins: list[float] = None, clip_maxs: list[float] = None,
     ):
@@ -17,9 +17,12 @@ class FeatureNormalizer(nn.Module):
         self.num_channels = num_channels
         self.num_features = num_features
         self.num_repeats = num_repeats
-        self.squeezed_channel_dim = squeezed_channel_dim
+        self.squeezed_channel_dim = squeeze_channel_dim
+        self.squeezed_feature_dim = squeeze_feature_dim
         if self.num_channels > 1 and self.squeezed_channel_dim:
             raise ValueError("squeeze_channel_dim cannot be True if num_channels > 1.")
+        if self.num_features > 1 and self.squeezed_feature_dim:
+            raise ValueError("squeeze_feature_dim cannot be True if num_features > 1.")
         dims = 2 if self.squeezed_channel_dim else 3
         if norm_mins is not None:
             if norm_maxs is None:
@@ -80,7 +83,7 @@ class FeatureNormalizer(nn.Module):
             x = (x + 1) / 2 * (self.norm_max - self.norm_min) + self.norm_min
         if self.clip_min is not None or self.clip_max is not None:
             x = x.clamp(min=self.clip_min, max=self.clip_max)
-        if self.num_features == 1:
+        if self.squeezed_feature_dim:
             features = x.squeeze(-1)  # [B, T, C] or [B, T]
         else:
             features = x.unbind(dim=-1)  # N x [B, T, C] or [B, T]

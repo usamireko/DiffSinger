@@ -34,7 +34,7 @@ class DiffSingerAcoustic(nn.Module):
             condition_dim=config.condition_dim,
             normalizer=FeatureNormalizer(
                 num_channels=config.sample_dim, num_features=1, num_repeats=None,
-                squeezed_channel_dim=False,
+                squeeze_channel_dim=False, squeeze_feature_dim=True,
                 norm_mins=[config.normalization.spec_min],
                 norm_maxs=[config.normalization.spec_max],
             ),
@@ -109,7 +109,7 @@ class DiffSingerVariance(nn.Module):
                 condition_dim=config.condition_dim,
                 normalizer=FeatureNormalizer(
                     num_channels=1, num_features=1, num_repeats=config.normalization.pitch_repeat_bins,
-                    squeezed_channel_dim=True,
+                    squeeze_channel_dim=True, squeeze_feature_dim=True,
                     norm_mins=[config.normalization.pitd_norm_min],
                     norm_maxs=[config.normalization.pitd_norm_max],
                     clip_mins=[config.normalization.pitd_clip_min],
@@ -131,7 +131,7 @@ class DiffSingerVariance(nn.Module):
                 normalizer=FeatureNormalizer(
                     num_channels=1, num_features=len(self.variance_list),
                     num_repeats=total_repeat_bins // len(self.variance_list),
-                    squeezed_channel_dim=True,
+                    squeeze_channel_dim=True, squeeze_feature_dim=False,
                     norm_mins=var_norm_mins, norm_maxs=var_norm_maxs,
                     clip_mins=var_clip_mins, clip_maxs=var_clip_maxs,
                 ),
