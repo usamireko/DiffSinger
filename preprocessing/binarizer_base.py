@@ -13,13 +13,12 @@ import tqdm
 from lib.config.schema import DataConfig, BinarizerConfig
 from lib.config.schema import DataSourceConfig
 from lib.feature import get_energy, get_tension, SinusoidalSmoothingConv1d
-from lib.feature.pitch import get_pitch_parselmouth, get_pitch_harvest
 from lib.feature.decomposition import (
     world_analyze, world_synthesize_harmonics, world_synthesize_aperiodic,
     get_kth_harmonic
 )
 from lib.feature.mel import StretchableMelSpectrogram
-from lib.functional import dur_to_mel2ph
+from lib.feature.pitch import get_pitch_parselmouth, get_pitch_harvest
 from modules.commons.tts_modules import LengthRegulator
 from utils.indexed_datasets import IndexedDatasetBuilder
 from utils.infer_utils import resample_align_curve
@@ -405,18 +404,11 @@ class BaseBinarizer(abc.ABC):
         return mel, mel.shape[0]
 
     @dask.delayed
-    def get_mel2ph(self, ph_dur: numpy.ndarray, length: int):
-        mel2ph = dur_to_mel2ph(
-            self.lr, torch.from_numpy(ph_dur).to(self.device), length, self.timestep
-        ).cpu().numpy()
-        return mel2ph
-
-    @dask.delayed
-    def sec_dur_to_frame_dur(self, dur_sec: numpy.ndarray):
-        dur_frame = numpy.diff(
-            numpy.round(numpy.cumsum(dur_sec, axis=0) / self.timestep + 0.5).astype(numpy.int64),
-            axis=0, prepend=numpy.array([0])
-        )
+    def sec_dur_to_frame_dur(self, dur_sec: numpy.ndarray, length: int):
+        dur_cumsum = numpy.round(numpy.cumsum(dur_sec, axis=0) / self.timestep + 0.5).astype(numpy.int64)
+        dur_cumsum = numpy.clip(dur_cumsum, a_min=0, a_max=length)
+        dur_cumsum[-1] = length
+        dur_frame = numpy.diff(dur_cumsum, axis=0, prepend=numpy.array([0]))
         return dur_frame
 
     @torch.no_grad()

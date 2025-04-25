@@ -14,8 +14,8 @@ ACOUSTIC_ITEM_ATTRIBUTES = [
     "spk_id",
     "languages",
     "tokens",
+    "ph_dur",
     "mel",
-    "mel2ph",
     "f0",
     "energy",
     "breathiness",
@@ -72,9 +72,9 @@ class AcousticBinarizer(BaseBinarizer):
 
     def process_item(self, item: AcousticMetadataItem, augmentation=False) -> list[DataSample]:
         waveform = self.load_waveform(item.wav_fn)
-        ph_dur = numpy.array(item.ph_dur, dtype=numpy.float32)
         mel, length = self.get_mel(waveform)
-        mel2ph = self.get_mel2ph(ph_dur, length)
+        ph_dur_sec = numpy.array(item.ph_dur, dtype=numpy.float32)
+        ph_dur = self.sec_dur_to_frame_dur(ph_dur_sec, length)
         f0, uv = self.get_f0(waveform, length)
         energy = self.get_energy(waveform, length, smooth_fn_name="energy")
         harmonic, noise = self.harmonic_noise_separation(waveform, f0)
@@ -87,8 +87,8 @@ class AcousticBinarizer(BaseBinarizer):
             "spk_id": item.spk_id,
             "languages": numpy.array(item.lang_seq, dtype=numpy.int64),
             "tokens": numpy.array(item.ph_seq, dtype=numpy.int64),
+            "ph_dur": ph_dur,
             "mel": mel,
-            "mel2ph": mel2ph,
             "f0": f0,
             "key_shift": 0.,
             "speed": 1.,
@@ -167,15 +167,15 @@ class AcousticBinarizer(BaseBinarizer):
         data_transforms = []
         for ori_idx, shift, speed in augmentation_params:
             mel_transform, length_transform = self.get_mel(waveform, shift=shift, speed=speed)
-            mel2ph_transform = self.get_mel2ph(ph_dur / speed, length_transform)
+            ph_dur_transform = self.sec_dur_to_frame_dur(ph_dur_sec / speed, length_transform)
             f0_transform = self.resize_curve(f0.compute() * 2 ** (shift / 12), length_transform)
             v_transform = {
                 v_name: self.resize_curve(data[v_name], length_transform)
                 for v_name in variance_names
             }
             data_transform = samples[ori_idx].data.copy()
+            data_transform["ph_dur"] = ph_dur_transform
             data_transform["mel"] = mel_transform
-            data_transform["mel2ph"] = mel2ph_transform
             data_transform["f0"] = f0_transform
             data_transform["key_shift"] = shift
             data_transform["speed"] = (  # real speed

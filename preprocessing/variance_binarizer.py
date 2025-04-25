@@ -6,6 +6,7 @@ import dask
 import librosa
 import numpy
 import scipy
+import torch
 
 from lib.config.schema import DataSourceConfig, DataConfig
 from lib.feature.pitch import interp_f0
@@ -17,12 +18,10 @@ VARIANCE_ITEM_ATTRIBUTES = [
     "languages",  # index numbers of phoneme languages, int64[T_ph,]
     "tokens",  # index numbers of phonemes, int64[T_ph,]
     "ph_dur",  # durations of phonemes, in number of frames, int64[T_ph,]
-    "mel2ph",  # mel2ph format representing number of frames within each phone, int64[T_s,]
     "note_midi",  # note-level MIDI pitch, float32[T_n,]
     "note_rest",  # flags for rest notes, bool[T_n,]
     "note_dur",  # durations of notes, in number of frames, int64[T_n,]
     "note_glide",  # flags for glides, 0 = none, 1 = up, 2 = down, int64[T_n,]
-    "mel2note",  # mel2ph format representing number of frames within each note, int64[T_s,]
     "base_pitch",  # interpolated and smoothed frame-level MIDI pitch, float32[T_s,]
     "pitch",  # actual pitch in semitones, float32[T_s,]
     "uv",  # unvoiced masks (only for objective evaluation metrics), bool[T_s,]
@@ -220,8 +219,7 @@ class VarianceBinarizer(BaseBinarizer):
         label = item.external_labels
         length = round(sum(item.ph_dur) / self.timestep)
         ph_dur_sec = numpy.array(item.ph_dur, dtype=numpy.float32)
-        ph_dur = self.sec_dur_to_frame_dur(ph_dur_sec)
-        mel2ph = self.get_mel2ph(ph_dur_sec, length)
+        ph_dur = self.sec_dur_to_frame_dur(ph_dur_sec, length)
         waveform = self.load_waveform(item.wav_fn)
         f0 = self.try_load_curve_from_label_if_allowed(
             label, "f0_seq", "f0_timestep", length
@@ -235,11 +233,10 @@ class VarianceBinarizer(BaseBinarizer):
             note_rest = numpy.array(item.note_rest, dtype=bool)
             note_midi = self.interp_midi(numpy.array(item.note_midi, dtype=numpy.float32), note_rest)
             note_dur_sec = numpy.array(item.note_dur, dtype=numpy.float32)
-            note_dur = self.sec_dur_to_frame_dur(note_dur_sec)
-            mel2note = self.get_mel2ph(note_dur_sec, length)
-            base_pitch = self.get_base_pitch(note_midi, mel2note)
+            note_dur = self.sec_dur_to_frame_dur(note_dur_sec, length)
+            base_pitch = self.get_base_pitch(note_midi, note_dur)
         else:
-            note_midi = note_rest = note_dur = mel2note = base_pitch = None
+            note_midi = note_rest = note_dur = base_pitch = None
         energy = self.try_load_curve_from_label_if_allowed(
             label, "energy_seq", "energy_timestep", length
         )
@@ -268,7 +265,6 @@ class VarianceBinarizer(BaseBinarizer):
             "languages": numpy.array(item.lang_seq, dtype=numpy.int64),
             "tokens": numpy.array(item.ph_seq, dtype=numpy.int64),
             "ph_dur": ph_dur,
-            "mel2ph": mel2ph,
             "pitch": pitch,
             "uv": uv,
         }
@@ -277,7 +273,6 @@ class VarianceBinarizer(BaseBinarizer):
                 "note_midi": note_midi,
                 "note_rest": note_rest,
                 "note_dur": note_dur,
-                "mel2note": mel2note,
                 "base_pitch": base_pitch,
             })
             if self.config.midi.with_glide:
@@ -323,7 +318,9 @@ class VarianceBinarizer(BaseBinarizer):
         return note_midi
 
     @dask.delayed
-    def get_base_pitch(self, note_midi: numpy.ndarray, mel2note: numpy.ndarray):
+    def get_base_pitch(self, note_midi: numpy.ndarray, note_dur: numpy.ndarray):
+        with torch.no_grad():
+            mel2note = self.lr(torch.from_numpy(note_dur).to(self.device)[None])[0].cpu().numpy()
         frame_midi_pitch = numpy.take_along_axis(
             numpy.pad(note_midi, (1, 0), mode="constant"), indices=mel2note, axis=0
         )

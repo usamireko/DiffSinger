@@ -11,6 +11,15 @@ from lib.config.schema import DataSourceConfig
 from preprocessing.binarizer_base import MetadataItem, BaseBinarizer, DataSample
 from lib.feature.pitch import interp_f0
 
+DURATION_ITEM_ATTRIBUTES = [
+    "spk_id",
+    "languages",
+    "tokens",
+    "ph_dur",
+    "ph_midi",
+    "ph2word",
+]
+
 
 @dataclass
 class DurationMetadataItem(MetadataItem):
@@ -19,6 +28,8 @@ class DurationMetadataItem(MetadataItem):
 
 
 class DurationBinarizer(BaseBinarizer):
+    __data_attrs__ = DURATION_ITEM_ATTRIBUTES
+
     def load_metadata(self, data_source_config: DataSourceConfig) -> dict[str, MetadataItem]:
         metadata_dict = collections.OrderedDict()
         raw_data_dir = data_source_config.raw_data_dir_resolved
@@ -82,8 +93,7 @@ class DurationBinarizer(BaseBinarizer):
         label = item.external_labels
         length = round(sum(item.ph_dur) / self.timestep)
         ph_dur_sec = numpy.array(item.ph_dur, dtype=numpy.float32)
-        ph_dur = self.sec_dur_to_frame_dur(ph_dur_sec)
-        mel2ph = self.get_mel2ph(ph_dur_sec, length)
+        ph_dur = self.sec_dur_to_frame_dur(ph_dur_sec, length)
         ph_num = numpy.array(item.ph_num, dtype=numpy.int64)
         ph2word = self.get_ph2word(ph_num)
         waveform = self.load_waveform(item.wav_fn)
@@ -95,7 +105,7 @@ class DurationBinarizer(BaseBinarizer):
         else:
             f0, uv = self.get_f0(waveform, length)
         pitch = dask.delayed(librosa.hz_to_midi)(f0)
-        ph_midi = self.get_ph_midi(ph_dur, mel2ph, pitch)
+        ph_midi = self.get_ph_midi(ph_dur, pitch)
 
         data = {
             "spk_id": item.spk_id,
@@ -129,7 +139,9 @@ class DurationBinarizer(BaseBinarizer):
         return ph2word[0].cpu().numpy()
 
     @dask.delayed
-    def get_ph_midi(self, ph_dur: numpy.ndarray, mel2ph: numpy.ndarray, pitch: numpy.ndarray):
+    def get_ph_midi(self, ph_dur: numpy.ndarray, pitch: numpy.ndarray):
+        with torch.no_grad():
+            mel2ph = self.lr(torch.from_numpy(ph_dur).to(self.device)[None])[0].cpu().numpy()
         mel2dur = numpy.take_along_axis(
             numpy.pad(ph_dur, (1, 0), mode="constant", constant_values=(1, 1)),
             indices=mel2ph, axis=0
