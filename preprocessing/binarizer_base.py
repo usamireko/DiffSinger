@@ -1,6 +1,8 @@
 import abc
+import json
 import pathlib
 from dataclasses import dataclass
+from typing import Literal
 
 import dask
 import librosa
@@ -53,7 +55,10 @@ class DataSample:
 class BaseBinarizer(abc.ABC):
     __data_attrs__: list[str] = None
 
-    def __init__(self, data_config: DataConfig, binarizer_config: BinarizerConfig):
+    def __init__(
+            self, data_config: DataConfig, binarizer_config: BinarizerConfig,
+            coverage_check_option: Literal["strict", "bypass", "compact"] = "strict"
+    ):
         self.phoneme_dictionary = PhonemeDictionary(
             dictionaries=data_config.dictionaries,
             extra_phonemes=data_config.extra_phonemes,
@@ -64,8 +69,9 @@ class BaseBinarizer(abc.ABC):
         self.sources = data_config.sources
         self.config = binarizer_config
         self.binary_data_dir: pathlib.Path = binarizer_config.binary_data_dir_resolved
-        self.binary_data_dir.mkdir(parents=True, exist_ok=True)
         self.timestep = binarizer_config.features.hop_size / binarizer_config.features.audio_sample_rate
+        self.coverage_check_option = coverage_check_option
+        self.missing_phonemes = set()
 
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.lr = LengthRegulator()
@@ -232,8 +238,25 @@ class BaseBinarizer(abc.ABC):
                     pad_inches=0.25)
         print(f"| save summary to '{filename}'")
 
-        # Check unrecognizable or missing phonemes
+        missing_phonemes = set()
+        missing_phonemes_display = []
+        for phone_id in ph_idx_required.difference(ph_idx_occurred):
+            phone_repr = self.phoneme_dictionary.decode_one(phone_id, scalar=False)
+            missing_phonemes_display.append(phone_repr)
+            if not isinstance(phone_repr, tuple):
+                phone_repr = (phone_repr,)
+            for ph in phone_repr:
+                missing_phonemes.add(ph)
+        if self.coverage_check_option == "bypass":
+            # bypass: ignore missing phonemes
+            return
+        if self.coverage_check_option == "compact":
+            # compact: record missing phonemes and exclude them from the dictionary
+            self.missing_phonemes = missing_phonemes
+            return
+        # strict: raise error on missing phonemes
         if ph_idx_occurred != ph_idx_required:
+            missing_phonemes_display.sort(key=lambda v: v[0] if isinstance(v, tuple) else v)
             missing_phones = sorted({
                 self.phoneme_dictionary.decode_one(idx, scalar=False)
                 for idx in ph_idx_required.difference(ph_idx_occurred)
@@ -334,6 +357,7 @@ class BaseBinarizer(abc.ABC):
             )
 
     def process(self):
+        self.binary_data_dir.mkdir(parents=True, exist_ok=True)
         for source in self.sources:
             metadata_dict = self.load_metadata(source)
             self.split_train_and_valid_set(metadata_dict, source.test_prefixes)
@@ -342,6 +366,11 @@ class BaseBinarizer(abc.ABC):
         if not self.valid_items:
             raise RuntimeError("Validation set is empty.")
         self.check_coverage()
+        with open(self.binary_data_dir / "spk_map.json", "w", encoding="utf8") as f:
+            json.dump(self.spk_map, f, ensure_ascii=False)
+        with open(self.binary_data_dir / "lang_map.json", "w", encoding="utf8") as f:
+            json.dump(self.lang_map, f, ensure_ascii=False)
+        self.phoneme_dictionary.dump(self.binary_data_dir / "ph_map.json", excludes=self.missing_phonemes)
         self.train_items.sort(key=lambda i: i.estimated_duration, reverse=True)
         self.process_items(self.valid_items, prefix="valid", augmentation=False, multiprocessing=False)
         self.process_items(self.train_items, prefix="train", augmentation=True, multiprocessing=True)

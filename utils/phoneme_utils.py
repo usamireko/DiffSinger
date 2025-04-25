@@ -1,8 +1,5 @@
 import json
 import pathlib
-from typing import Dict, List, Union
-
-from utils.hparams import hparams
 
 PAD_INDEX = 0
 
@@ -10,16 +7,16 @@ PAD_INDEX = 0
 class PhonemeDictionary:
     def __init__(
             self,
-            dictionaries: Dict[str, pathlib.Path],
-            extra_phonemes: List[str] = None,
-            merged_groups: List[List[str]] = None
+            dictionaries: dict[str, pathlib.Path],
+            extra_phonemes: list[str] = None,
+            merged_groups: list[list[str]] = None
     ):
         # Step 1: Collect all phonemes
-        all_phonemes = {'AP', 'SP'}
+        all_phonemes = {"AP", "SP"}
         if extra_phonemes:
             for ph in extra_phonemes:
-                if '/' in ph:
-                    lang, name = ph.split('/', maxsplit=1)
+                if "/" in ph:
+                    lang, name = ph.split("/", maxsplit=1)
                     if lang not in dictionaries:
                         raise ValueError(
                             f"Invalid phoneme tag '{ph}' in extra phonemes: "
@@ -31,24 +28,20 @@ class PhonemeDictionary:
                             f"short name conflicts with existing tag."
                         )
                 all_phonemes.add(ph)
-        self._multi_langs = len(dictionaries) > 1
         for lang, dict_path in dictionaries.items():
-            with open(dict_path, 'r', encoding='utf8') as dict_file:
+            with open(dict_path, "r", encoding="utf8") as dict_file:
                 for line in dict_file:
-                    _, phonemes = line.strip().split('\t')
+                    _, phonemes = line.strip().split("\t")
                     phonemes = phonemes.split()
                     for phoneme in phonemes:
-                        if '/' in phoneme:
+                        if "/" in phoneme:
                             raise ValueError(
                                 f"Invalid phoneme tag '{phoneme}' in dictionary '{dict_path}': "
                                 f"should not contain the reserved character '/'."
                             )
                         if phoneme in all_phonemes:
                             continue
-                        if self._multi_langs:
-                            all_phonemes.add(f'{lang}/{phoneme}')
-                        else:
-                            all_phonemes.add(phoneme)
+                        all_phonemes.add(f"{lang}/{phoneme}")
         # Step 2: Parse merged phoneme groups
         if merged_groups is None:
             merged_groups = []
@@ -57,25 +50,19 @@ class PhonemeDictionary:
             for group in merged_groups:
                 _group = []
                 for phoneme in group:
-                    if '/' in phoneme:
-                        lang, name = phoneme.split('/', maxsplit=1)
+                    if "/" in phoneme:
+                        lang, name = phoneme.split("/", maxsplit=1)
                         if lang not in dictionaries:
                             raise ValueError(
                                 f"Invalid phoneme tag '{phoneme}' in merged group: "
                                 f"unrecognized language name '{lang}'."
                             )
-                        if self._multi_langs:
-                            element = phoneme
-                        else:
-                            element = name
-                    else:
-                        element = phoneme
-                    if element not in all_phonemes:
+                    if phoneme not in all_phonemes:
                         raise ValueError(
                             f"Invalid phoneme tag '{phoneme}' in merged group: "
                             f"not found in phoneme set."
                         )
-                    _group.append(element)
+                    _group.append(phoneme)
                 _merged_groups.append(_group)
             merged_groups = [set(phones) for phones in _merged_groups if len(phones) > 1]
         # Step 3: Build phoneme index
@@ -106,19 +93,19 @@ class PhonemeDictionary:
                 if not has_assigned:
                     merged_group = sorted(merged_groups[merged_phonemes_inverted_index[phoneme]])
                     merged_from_langs = {
-                        (alias.split('/', maxsplit=1)[0] if '/' in alias else None)
+                        (alias.split("/", maxsplit=1)[0] if "/" in alias else None)
                         for alias in merged_group
                     }
                     id_to_phone.append(tuple(merged_group))
                     idx += 1
                     if len(merged_from_langs) > 1:
-                        cross_lingual_phonemes.update(ph for ph in merged_group if '/' in ph)
+                        cross_lingual_phonemes.update(ph for ph in merged_group if "/" in ph)
             else:
                 phone_to_id[phoneme] = idx
                 id_to_phone.append(phoneme)
                 idx += 1
-        self._phone_to_id: Dict[str, int] = phone_to_id
-        self._id_to_phone: List[Union[str, tuple]] = id_to_phone
+        self._phone_to_id: dict[str, int] = phone_to_id
+        self._id_to_phone: list[str | tuple] = id_to_phone
         self._cross_lingual_phonemes = frozenset(cross_lingual_phonemes)
 
     @property
@@ -136,12 +123,12 @@ class PhonemeDictionary:
         return phone in self._cross_lingual_phonemes
 
     def encode_one(self, phone, lang=None):
-        if '/' in phone:
-            lang, phone = phone.split('/', maxsplit=1)
-        if lang is None or not self._multi_langs or phone in self._phone_to_id:
+        if "/" in phone:
+            lang, phone = phone.split("/", maxsplit=1)
+        if lang is None or phone in self._phone_to_id:
             return self._phone_to_id[phone]
-        if '/' not in phone:
-            phone = f'{lang}/{phone}'
+        if "/" not in phone:
+            phone = f"{lang}/{phone}"
         return self._phone_to_id[phone]
 
     def encode(self, sentence, lang=None):
@@ -154,57 +141,26 @@ class PhonemeDictionary:
         phone = self._id_to_phone[idx - 1]
         if not scalar or isinstance(phone, str):
             return phone
-        if lang is None or not self._multi_langs:
+        if lang is None:
             return phone[0]
         for alias in phone:
-            if alias.startswith(f'{lang}/'):
+            if alias.startswith(f"{lang}/"):
                 return alias
         return phone[0]
 
     def decode(self, ids, lang=None, scalar=True):
         ids = list(ids)
-        return ' '.join([
+        return " ".join([
             self.decode_one(i, lang=lang, scalar=scalar)
             for i in ids
             if i >= 1
         ])
 
-    def dump(self, filename):
-        with open(filename, 'w', encoding='utf8') as fp:
-            json.dump(self._phone_to_id, fp, ensure_ascii=False, indent=2)
-
-
-_dictionary = None
-
-
-def load_phoneme_dictionary() -> PhonemeDictionary:
-    if _dictionary is not None:
-        return _dictionary
-    config_dicts = hparams.get('dictionaries')
-    if config_dicts is not None:
-        dicts = {}
-        for lang, config_dict_path in config_dicts.items():
-            dict_path = pathlib.Path(hparams['work_dir']) / f'dictionary-{lang}.txt'
-            if not dict_path.exists():
-                dict_path = pathlib.Path(config_dict_path)
-            if not dict_path.exists():
-                raise FileNotFoundError(
-                    f"Could not locate dictionary for language '{lang}'."
-                )
-            dicts[lang] = dict_path
-    else:
-        dict_path = pathlib.Path(hparams['work_dir']) / 'dictionary.txt'
-        if not dict_path.exists():
-            dict_path = pathlib.Path(hparams['dictionary'])
-        if not dict_path.exists():
-            raise FileNotFoundError(
-                f"Could not locate dictionary file."
-            )
-        dicts = {
-            'default': dict_path
-        }
-    return PhonemeDictionary(
-        dictionaries=dicts,
-        extra_phonemes=hparams.get('extra_phonemes'),
-        merged_groups=hparams.get('merged_phoneme_groups')
-    )
+    def dump(self, filename, includes: set[str] = None, excludes: set[str] = None):
+        ph_map = self._phone_to_id.copy()
+        if includes:
+            ph_map = {k: v for k, v in ph_map.items() if k in includes}
+        if excludes:
+            ph_map = {k: v for k, v in ph_map.items() if k not in excludes}
+        with open(filename, "w", encoding="utf8") as fp:
+            json.dump(ph_map, fp, ensure_ascii=False, indent=2)
