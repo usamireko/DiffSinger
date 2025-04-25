@@ -159,17 +159,21 @@ class VarianceBinarizer(BaseBinarizer):
                     midi_map[midi] = 1
 
         print("===== MIDI Pitch Distribution Summary =====")
-        for i, key in enumerate(sorted(midi_map.keys())):
-            if i == len(midi_map) - 1:
-                end = "\n"
-            elif i % 10 == 9:
-                end = ",\n"
-            else:
-                end = ", "
-            print(f"\'{librosa.midi_to_note(key, unicode=False)}\': {midi_map[key]}", end=end)
+        midis = sorted(midi_map.keys())
+        width = 10
+        start = 0
+        while start < len(midis):
+            end = min(start + width, len(midis))
+            disp = ", ".join(
+                f"{librosa.midi_to_note(m, unicode=False)}: {midi_map[m]}"
+                for m in midis[start:end]
+            )
+            if end < len(midis):
+                disp += ","
+            print(disp)
+            start = end
 
         # Draw graph.
-        midis = sorted(midi_map.keys())
         notes = [librosa.midi_to_note(m, unicode=False) for m in range(midis[0], midis[-1] + 1)]
         plt = distribution_to_figure(
             title="MIDI Pitch Distribution Summary",
@@ -177,9 +181,7 @@ class VarianceBinarizer(BaseBinarizer):
             items=notes, values=[midi_map.get(m, 0) for m in range(midis[0], midis[-1] + 1)]
         )
         filename = self.binary_data_dir / "midi_distribution.jpg"
-        plt.savefig(fname=filename,
-                    bbox_inches="tight",
-                    pad_inches=0.25)
+        plt.savefig(fname=filename, bbox_inches="tight", pad_inches=0.25)
         print(f"| save summary to \'{filename}\'")
 
         if self.config.midi.with_glide:
@@ -197,15 +199,12 @@ class VarianceBinarizer(BaseBinarizer):
                     glide_count[glide_inverted_idx[glide]] += 1
 
             print("===== Glide Type Distribution Summary =====")
-            for i, key in enumerate(sorted(glide_count.keys(), key=lambda k: self.glide_map[k])):
-                if i == len(glide_count) - 1:
-                    end = "\n"
-                elif i % 10 == 9:
-                    end = ",\n"
-                else:
-                    end = ", "
-                print(f"\'{key}\': {glide_count[key]}", end=end)
+            print(", ".join(
+                f"{g}: {glide_count[g]}"
+                for g in sorted(glide_count.keys(), key=lambda k: self.glide_map[k])
+            ))
 
+            # Glide coverage does not follow coverage_check_option
             if any(n == 0 for _, n in glide_count.items()):
                 raise RuntimeError(
                     f"Missing glide types in dataset: "

@@ -188,8 +188,7 @@ class BaseBinarizer(abc.ABC):
             self.train_items.append(item)
 
     def check_coverage(self):
-        # TODO refactor this
-        # Group by phonemes in the dictionary.
+        # Group by phoneme IDs in the dictionary.
         ph_idx_required = set(range(1, len(self.phoneme_dictionary)))
         ph_idx_occurred = set()
         ph_idx_count_map = {
@@ -214,15 +213,18 @@ class BaseBinarizer(abc.ABC):
 
         print("===== Phoneme Distribution Summary =====")
         keys = sorted(ph_count_map.keys(), key=lambda v: v[0] if isinstance(v, tuple) else v)
-        for i, key in enumerate(keys):
-            if i == len(ph_count_map) - 1:
-                end = "\n"
-            elif i % 10 == 9:
-                end = ",\n"
-            else:
-                end = ", "
-            key_disp = display_phoneme(key)
-            print(f"{key_disp}: {ph_count_map[key]}", end=end)
+        width = 10
+        start = 0
+        while start < len(keys):
+            end = min(start + width, len(keys))
+            disp = ", ".join(
+                f"{display_phoneme(k)}: {ph_count_map[k]}"
+                for k in keys[start:end]
+            )
+            if end < len(keys):
+                disp += ","
+            print(disp)
+            start = end
 
         # Draw graph.
         xs = [display_phoneme(k) for k in keys]
@@ -233,9 +235,7 @@ class BaseBinarizer(abc.ABC):
             items=xs, values=ys, rotate=len(self.lang_map) > 1
         )
         filename = self.binary_data_dir / "phoneme_distribution.jpg"
-        plt.savefig(fname=filename,
-                    bbox_inches="tight",
-                    pad_inches=0.25)
+        plt.savefig(fname=filename, bbox_inches="tight", pad_inches=0.25)
         print(f"| save summary to '{filename}'")
 
         missing_phonemes = set()
