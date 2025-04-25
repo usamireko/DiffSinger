@@ -236,7 +236,7 @@ class BaseBinarizer(abc.ABC):
         plt = distribution_to_figure(
             title="Phoneme Distribution Summary",
             x_label="Phoneme", y_label="Number of occurrences",
-            items=xs, values=ys, rotate=len(self.lang_map) > 1
+            items=xs, values=ys, rotate=True
         )
         filename = self.binary_data_dir / "phoneme_distribution.jpg"
         plt.savefig(fname=filename, bbox_inches="tight", pad_inches=0.25)

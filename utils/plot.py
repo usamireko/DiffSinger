@@ -113,7 +113,7 @@ def distribution_to_figure(title, x_label, y_label, items: list, values: list, z
     plt.xlim(-1, len(items))
     for a, b in zip(items, values):
         plt.text(a, b, b, ha='center', va='bottom', fontsize=15)
-    plt.grid()
+    plt.grid(axis="y")
     plt.title(title, fontsize=30)
     plt.xlabel(x_label, fontsize=20)
     plt.ylabel(y_label, fontsize=20)
