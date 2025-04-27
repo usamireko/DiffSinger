@@ -32,7 +32,9 @@ def _load_and_log_config(config_path: pathlib.Path, scope: int, overrides: list[
 
 def train_model(
         config: RootConfig, pl_module_cls,
-        ckpt_save_dir: pathlib.Path, resume_from: pathlib.Path = None
+        ckpt_save_dir: pathlib.Path,
+        log_save_dir: pathlib.Path,
+        resume_from: pathlib.Path = None
 ):
     import lightning.pytorch
     import lightning.pytorch.loggers
@@ -122,7 +124,7 @@ def train_model(
         num_nodes=training_config.trainer.num_nodes,
         precision=training_config.trainer.precision,
         logger=lightning.pytorch.loggers.TensorBoardLogger(
-            save_dir=ckpt_save_dir,
+            save_dir=log_save_dir,
             name="lightning_logs",
             version="latest",
         ),
@@ -171,7 +173,14 @@ def main():
 @click.option(
     "--exp-name", type=click.STRING,
     required=True,
-    help="Experiment name. Checkpoints and logs will be saved in subdirectory with this name."
+    help="Experiment name. Checkpoints will be saved in subdirectory with this name."
+)
+@click.option(
+    "--log-dir", type=click.Path(
+        dir_okay=True, file_okay=False, path_type=pathlib.Path
+    ),
+    required=False,
+    help="Directory to save logs. If not specified, logs will be saved in the checkpoints directory."
 )
 @click.option(
     "--resume-from", type=click.Path(
@@ -183,14 +192,20 @@ def main():
 def _train_acoustic_model_cli(
         config: pathlib.Path, override: list[str],
         exp_name: str, work_dir: pathlib.Path,
+        log_dir: pathlib.Path,
         resume_from: pathlib.Path,
 ):
     config = _load_and_log_config(config, scope=ConfigurationScope.ACOUSTIC, overrides=override)
     ckpt_save_dir = work_dir / exp_name
+    if log_dir is None:
+        log_save_dir = ckpt_save_dir
+    else:
+        log_save_dir = log_dir / exp_name
     from training.acoustic_module import AcousticLightningModule
     train_model(
         config=config, pl_module_cls=AcousticLightningModule,
-        ckpt_save_dir=ckpt_save_dir, resume_from=resume_from
+        ckpt_save_dir=ckpt_save_dir, log_save_dir=log_save_dir,
+        resume_from=resume_from
     )
 
 
