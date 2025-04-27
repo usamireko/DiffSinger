@@ -10,7 +10,6 @@ sys.path.insert(0, str(root_dir))
 
 import click
 import yaml
-from pydantic import BaseModel
 
 from lib.config.formatter import ModelFormatter
 from lib.config.io import load_raw_config
@@ -53,14 +52,16 @@ def train_model(
         shutil.copy(from_dir / "ph_map.json", to_dir)
 
     @rank_zero_only
-    def _config_dump(cfg: BaseModel, dump_path: pathlib.Path):
-        with open(dump_path, "w", encoding="utf8") as f:
+    def _config_dump(cfg: RootConfig, to_dir: pathlib.Path):
+        with open(to_dir / "config.yaml", "w", encoding="utf8") as f:
             yaml.safe_dump(cfg.model_dump(include={"model", "inference"}), f, allow_unicode=True, sort_keys=False)
+        with open(to_dir / "hparams.yaml", "w", encoding="utf8") as f:
+            yaml.safe_dump(cfg.model_dump(), f, allow_unicode=True, sort_keys=False)
 
     binary_data_dir = config.binarizer.binary_data_dir_resolved
     ckpt_save_dir.mkdir(parents=True, exist_ok=True)
     _payload_copy(binary_data_dir, ckpt_save_dir)
-    _config_dump(config, ckpt_save_dir / "config.yaml")
+    _config_dump(config, ckpt_save_dir)
     model_config = config.model
     training_config = config.training
 
@@ -79,30 +80,30 @@ def train_model(
     callbacks = [
         DsTQDMProgressBar()
     ]
-    for config in training_config.trainer.checkpoints:
-        if config.type == "periodic":
-            config: PeriodicCheckpointConfig
+    for ckpt_config in training_config.trainer.checkpoints:
+        if ckpt_config.type == "periodic":
+            ckpt_config: PeriodicCheckpointConfig
             checkpoint = PeriodicModelCheckpoint(
                 dirpath=ckpt_save_dir,
-                prefix=config.prefix,
-                unit=config.unit,
-                every_n_units=config.every_n_units,
-                since_m_units=config.since_m_units,
-                save_last_k=config.save_last_k,
-                save_weights_only=config.weights_only,
+                prefix=ckpt_config.prefix,
+                unit=ckpt_config.unit,
+                every_n_units=ckpt_config.every_n_units,
+                since_m_units=ckpt_config.since_m_units,
+                save_last_k=ckpt_config.save_last_k,
+                save_weights_only=ckpt_config.weights_only,
             )
-        elif config.type == "expression":
-            config: ExpressionCheckpointConfig
+        elif ckpt_config.type == "expression":
+            ckpt_config: ExpressionCheckpointConfig
             checkpoint = ExpressionModelCheckpoint(
                 dirpath=ckpt_save_dir,
-                prefix=config.prefix,
-                expression=config.expression,
-                mode=config.mode,
-                save_top_k=config.save_top_k,
-                save_weights_only=config.weights_only,
+                prefix=ckpt_config.prefix,
+                expression=ckpt_config.expression,
+                mode=ckpt_config.mode,
+                save_top_k=ckpt_config.save_top_k,
+                save_weights_only=ckpt_config.weights_only,
             )
         else:
-            raise ValueError(f"Invalid checkpoint monitor type: {config.type}")
+            raise ValueError(f"Invalid checkpoint monitor type: {ckpt_config.type}")
         callbacks.append(checkpoint)
     trainer = lightning.pytorch.Trainer(
         accelerator=training_config.trainer.accelerator,

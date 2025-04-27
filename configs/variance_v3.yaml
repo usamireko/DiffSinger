@@ -182,19 +182,24 @@ training:
     checkpoints:
       - prefix: "model_ckpt_temp"
         type: "periodic"
+        unit: "step"
         every_n_units: 2000
         since_m_units: 0
-        save_last_k: 1
+        save_last_k: 2
+        weights_only: false
       - prefix: "model_ckpt_perm"
         type: "periodic"
+        unit: "step"
         every_n_units: 20000
         since_m_units: 80000
         save_last_k: -1
+        weights_only: false
       - prefix: "model_ckpt"
         type: "expression"
-        expression: "val_loss"
+        expression: "total_loss"
         save_top_k: 5
         mode: "min"
+        weights_only: false
     precision: "16-mixed"
     accelerator: "auto"
     devices: "auto"

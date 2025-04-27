@@ -127,7 +127,7 @@ training:
       aux_loss_type: L1
   dataloader:
     max_batch_frames: 50000
-    max_batch_size: 64
+    max_batch_size: 48
     max_val_batch_frames: 20000
     max_val_batch_size: 1
     frame_count_grid: 6
@@ -157,22 +157,24 @@ training:
     checkpoints:
       - prefix: "model_ckpt_temp"
         type: "periodic"
-        weights_only: false
+        unit: "step"
         every_n_units: 2000
         since_m_units: 0
         save_last_k: 2
+        weights_only: false
       - prefix: "model_ckpt_perm"
         type: "periodic"
-        weights_only: false
+        unit: "step"
         every_n_units: 20000
         since_m_units: 80000
         save_last_k: -1
-      - prefix: "model_ckpt"
         weights_only: false
+      - prefix: "model_ckpt"
         type: "expression"
-        expression: "diff_spec_loss"
+        expression: "total_loss"
         save_top_k: 5
         mode: "min"
+        weights_only: false
     precision: "16-mixed"
     accelerator: "auto"
     devices: "auto"
