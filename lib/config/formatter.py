@@ -39,7 +39,13 @@ class ModelFormatter:
 
         key_width = 0 if key is None else len(key) + len(self.connector)
         if isinstance(value, BaseModel):
-            width = float('inf')
+            if any(
+                not field.exclude and hasattr(value, name) and getattr(value, name) is not None
+                for name, field in type(value).model_fields.items()
+            ):
+                width = float('inf')  # force new line
+            else:
+                width = key_width + 2  # wrap empty object
         elif isinstance(value, (tuple, list)):
             item_count = len(value)
             items_width = sum(self.get_width(None, item) for item in value)
@@ -88,7 +94,7 @@ class ModelFormatter:
         if key is None:
             prefix = ""
         else:
-            prefix = f"{key}{self.connector}"
+            prefix = f"\033[0;33m{key}\033[0m{self.connector}"
 
         def _process(_elements: List[Tuple[Optional[str], Any]], _prefix: str, _suffix: str):
             self.current_line.append(_prefix)
