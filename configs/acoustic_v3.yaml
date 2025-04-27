@@ -157,15 +157,18 @@ training:
     checkpoints:
       - prefix: "model_ckpt_temp"
         type: "periodic"
+        weights_only: false
         every_n_units: 2000
         since_m_units: 0
         save_last_k: 2
       - prefix: "model_ckpt_perm"
         type: "periodic"
+        weights_only: false
         every_n_units: 20000
         since_m_units: 80000
         save_last_k: -1
       - prefix: "model_ckpt"
+        weights_only: false
         type: "expression"
         expression: "diff_spec_loss"
         save_top_k: 5

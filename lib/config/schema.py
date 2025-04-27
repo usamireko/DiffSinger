@@ -561,6 +561,7 @@ class LRSchedulerConfig(ConfigBaseModel):
 class PeriodicCheckpointConfig(ConfigBaseModel):
     prefix: str = Field("model_ckpt")
     type: Literal["periodic"] = Field("periodic")
+    weights_only: bool = Field(False)
     unit: Literal["step", "epoch"] = Field(None, json_schema_extra={
         "dynamic_expr": ref("training.trainer.unit")
     })
@@ -572,6 +573,7 @@ class PeriodicCheckpointConfig(ConfigBaseModel):
 class ExpressionCheckpointConfig(ConfigBaseModel):
     prefix: str = Field("model_ckpt")
     type: Literal["expression"] = Field("expression")
+    weights_only: bool = Field(False)
     expression: str = Field(...)
     save_top_k: int = Field(5)
     mode: Literal["max", "min"] = Field(...)

@@ -18,7 +18,8 @@ class PeriodicModelCheckpoint(lightning.pytorch.callbacks.ModelCheckpoint):
             unit: Literal["step", "epoch"],
             every_n_units: int,
             since_m_units: int = 0,
-            save_last_k: int = 1
+            save_last_k: int = 1,
+            save_weights_only: bool = False,
     ):
         if unit == "step":
             filename = f"{prefix}-steps={{step:07d}}"
@@ -38,6 +39,7 @@ class PeriodicModelCheckpoint(lightning.pytorch.callbacks.ModelCheckpoint):
             verbose=True,
             save_last=False,
             save_top_k=-1,
+            save_weights_only=save_weights_only,
             auto_insert_metric_name=False,
             every_n_train_steps=every_n_train_steps,
             every_n_epochs=every_n_epochs,
@@ -122,7 +124,8 @@ class ExpressionModelCheckpoint(lightning.pytorch.callbacks.ModelCheckpoint):
             prefix: str,
             expression: str,
             mode: Literal["min", "max"],
-            save_top_k: int = 1
+            save_top_k: int = 1,
+            save_weights_only: bool = False,
     ):
         parsed_expr = sympy.sympify(expression)
         if isinstance(parsed_expr, sympy.Number):
@@ -139,6 +142,7 @@ class ExpressionModelCheckpoint(lightning.pytorch.callbacks.ModelCheckpoint):
             verbose=False,
             save_last=False,
             save_top_k=save_top_k,
+            save_weights_only=save_weights_only,
             mode=mode,
             auto_insert_metric_name=False,
             enable_version_counter=False,

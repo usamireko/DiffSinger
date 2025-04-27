@@ -89,6 +89,7 @@ def train_model(
                 every_n_units=config.every_n_units,
                 since_m_units=config.since_m_units,
                 save_last_k=config.save_last_k,
+                save_weights_only=config.weights_only,
             )
         elif config.type == "expression":
             config: ExpressionCheckpointConfig
@@ -98,6 +99,7 @@ def train_model(
                 expression=config.expression,
                 mode=config.mode,
                 save_top_k=config.save_top_k,
+                save_weights_only=config.weights_only,
             )
         else:
             raise ValueError(f"Invalid checkpoint monitor type: {config.type}")
