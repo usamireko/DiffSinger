@@ -16,14 +16,13 @@ from torchmetrics import Metric, MeanMetric
 import lightning.pytorch as pl
 from lightning.pytorch.utilities.rank_zero import rank_zero_debug, rank_zero_info, rank_zero_only
 
-from basics.base_module import CategorizedModule
 from utils.hparams import hparams
 from utils.training_utils import (
     DsModelCheckpoint, DsTQDMProgressBar,
     DsBatchSampler, DsTensorBoardLogger,
     get_latest_checkpoint_path, get_strategy
 )
-from utils.phoneme_utils import load_phoneme_dictionary
+from lib.vocabulary import load_phoneme_dictionary
 
 torch.multiprocessing.set_sharing_strategy(os.getenv('TORCH_SHARE_STRATEGY', 'file_system'))
 
