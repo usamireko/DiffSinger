@@ -74,7 +74,7 @@ class BaseLightningModule(lightning.pytorch.LightningModule, abc.ABC):
             frame_count_grid=dataloader_config.frame_count_grid,
             batch_count_multiple_of=self.training_config.trainer.accumulate_grad_batches,
             reassign_batches=True,
-            shuffle_batches=True,
+            shuffle_batches=False,
             seed=42,
         )
         return torch.utils.data.DataLoader(
