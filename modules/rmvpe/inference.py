@@ -71,7 +71,7 @@ class RMVPE:
         f0_list = []
         uv_list = []
         for i, size in enumerate(length):
-            f0, uv = f0s[i, :size], uvs[i, :size]
+            f0, uv = f0s[i], uvs[i]
             f0, uv = interp_f0(f0, uv)
             hop_size = int(np.round(hop_size * speed))
             time_step = hop_size / samplerate
