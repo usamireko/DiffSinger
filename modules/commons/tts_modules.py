@@ -425,13 +425,15 @@ class LocalUpsample(nn.Module):
     def __init__(self):
         """
         Inputs: x: [B, T, H], ups: [B, T]
-        Outputs: x_up: [B, sum(ups), H]
+        Outputs: x_up: [B, sum(ups), H], mask [B, sum(ups)]
         """
         super().__init__()
         self.lr = LengthRegulator()
 
     def forward(self, x, ups):
         x = F.pad(x, [0, 0, 1, 0])
-        indices = self.lr(ups)[..., None].repeat(1, 1, x.shape[-1])
+        indices = self.lr(ups)
+        mask = indices > 0
+        indices = indices[..., None].repeat(1, 1, x.shape[-1])
         x_up = torch.gather(x, 1, indices)
-        return x_up
+        return x_up, mask

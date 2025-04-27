@@ -20,9 +20,9 @@ ENCODERS = {
 
 
 class LinguisticEncoder(nn.Module):
-    def __init__(self, vocab_size, config: LinguisticEncoderConfig):
+    def __init__(self, config: LinguisticEncoderConfig):
         super().__init__()
-        self.token_embedding = Embedding(vocab_size, config.hidden_size, padding_idx=0)
+        self.token_embedding = Embedding(config.vocab_size, config.hidden_size, padding_idx=0)
         self.use_lang_id = config.use_lang_id
         if self.use_lang_id:
             self.language_embedding = Embedding(config.num_lang + 1, config.hidden_size, padding_idx=0)

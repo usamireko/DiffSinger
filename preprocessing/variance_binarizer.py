@@ -261,7 +261,7 @@ class VarianceBinarizer(BaseBinarizer):
             tension = self.get_tension(harmonic, base_harmonic, length)
 
         data = {
-            "spk_id": item.spk_id,
+            "spk_id": numpy.array(item.spk_id, dtype=numpy.int64),
             "languages": numpy.array(item.lang_seq, dtype=numpy.int64),
             "tokens": numpy.array(item.ph_seq, dtype=numpy.int64),
             "ph_dur": ph_dur,

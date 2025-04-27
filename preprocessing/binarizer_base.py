@@ -23,7 +23,7 @@ from modules.commons.tts_modules import LengthRegulator
 from utils.indexed_datasets import IndexedDatasetBuilder
 from utils.infer_utils import resample_align_curve
 from utils.multiprocess_utils import chunked_multiprocess_run
-from utils.phoneme_utils import PhonemeDictionary
+from lib.vocabulary import PhonemeDictionary
 from utils.plot import distribution_to_figure
 
 
@@ -58,11 +58,7 @@ class BaseBinarizer(abc.ABC):
             self, data_config: DataConfig, binarizer_config: BinarizerConfig,
             coverage_check_option: Literal["strict", "bypass", "compact"] = "strict"
     ):
-        self.phoneme_dictionary = PhonemeDictionary(
-            dictionaries=data_config.dictionaries,
-            extra_phonemes=data_config.extra_phonemes,
-            merged_groups=data_config.merged_phoneme_groups
-        )
+        self.phoneme_dictionary = data_config.phoneme_dictionary
         self.spk_map = data_config.spk_map
         self.lang_map = data_config.lang_map
         self.sources = data_config.sources
@@ -310,7 +306,7 @@ class BaseBinarizer(abc.ABC):
                 spk_names.append(sample.spk_name)
                 lengths.append(sample.length)
                 for k, v in sample.data.items():
-                    if isinstance(v, numpy.ndarray):
+                    if isinstance(v, numpy.ndarray) and v.ndim > 0:
                         if k not in attr_lengths:
                             attr_lengths[k] = []
                         attr_lengths[k].append(v.shape[0])

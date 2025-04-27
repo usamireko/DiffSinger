@@ -12,7 +12,7 @@ from deployment.modules.toplevel import DiffSingerVarianceONNX
 from modules.fastspeech.param_adaptor import VARIANCE_CHECKLIST
 from utils import load_ckpt, onnx_helper, remove_suffix
 from utils.hparams import hparams
-from utils.phoneme_utils import load_phoneme_dictionary
+from lib.vocabulary import load_phoneme_dictionary
 
 
 class DiffSingerVarianceExporter(BaseExporter):

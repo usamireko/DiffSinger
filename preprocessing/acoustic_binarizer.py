@@ -84,14 +84,14 @@ class AcousticBinarizer(BaseBinarizer):
         tension = self.get_tension(harmonic, base_harmonic, length)
 
         data = {
-            "spk_id": item.spk_id,
+            "spk_id": numpy.array(item.spk_id, dtype=numpy.int64),
             "languages": numpy.array(item.lang_seq, dtype=numpy.int64),
             "tokens": numpy.array(item.ph_seq, dtype=numpy.int64),
             "ph_dur": ph_dur,
             "mel": mel,
             "f0": f0,
-            "key_shift": 0.,
-            "speed": 1.,
+            "key_shift": numpy.array(0., dtype=numpy.float32),
+            "speed": numpy.array(1., dtype=numpy.float32),
         }
         variance_names = []
         if self.config.features.energy.used:
@@ -177,9 +177,11 @@ class AcousticBinarizer(BaseBinarizer):
             data_transform["ph_dur"] = ph_dur_transform
             data_transform["mel"] = mel_transform
             data_transform["f0"] = f0_transform
-            data_transform["key_shift"] = shift
-            data_transform["speed"] = (  # real speed
-                dask.delayed(lambda x: samples[ori_idx].length / x)(length_transform)
+            data_transform["key_shift"] = numpy.array(shift, dtype=numpy.float32)
+            data_transform["speed"] = (
+                dask.delayed(
+                    lambda x: numpy.array(samples[ori_idx].length / x, dtype=numpy.float32)  # real speed
+                )(length_transform)
             )
             for v_name in variance_names:
                 data_transform[v_name] = v_transform[v_name]
@@ -201,5 +203,5 @@ class AcousticBinarizer(BaseBinarizer):
         original_length = len(curve)
         original_indices = numpy.linspace(0, original_length - 1, num=original_length)
         target_indices = numpy.linspace(0, original_length - 1, num=target_length)
-        interpolated_curve = numpy.interp(target_indices, original_indices, curve)
+        interpolated_curve = numpy.interp(target_indices, original_indices, curve).astype(curve.dtype)
         return interpolated_curve

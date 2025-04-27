@@ -141,11 +141,21 @@ model:
       strong_cond: true
 
 training:
-  batch_sampler:
+  loss:
+    pitch_predictor:
+      main_loss_type: L2
+      main_loss_log_norm: false
+      aux_loss_type: L1
+    variance_predictor:
+      main_loss_type: L2
+      main_loss_log_norm: false
+      aux_loss_type: L1
+  dataloader:
     max_batch_frames: 50000
     max_batch_size: 64
+    max_val_batch_frames: 20000
+    max_val_batch_size: 1
     frame_count_grid: 6
-  data_loader:
     num_workers: 4
     prefetch_factor: 2
   optimizer:
@@ -166,22 +176,26 @@ training:
     max_steps: 120000
     min_epochs: 0
     max_epochs: 1000
+    val_every_n_units: 2000
+    log_every_n_steps: 1
+    num_sanity_val_steps: 1
     checkpoints:
       - prefix: "model_ckpt_temp"
-        monitor: "unit"
-        save_top_k: 1
+        type: "periodic"
         every_n_units: 2000
         since_m_units: 0
+        save_last_k: 1
       - prefix: "model_ckpt_perm"
-        monitor: "unit"
-        save_top_k: -1
+        type: "periodic"
         every_n_units: 20000
         since_m_units: 80000
+        save_last_k: -1
       - prefix: "model_ckpt"
-        monitor: "metric"
-        expr: "total_loss"
+        type: "expression"
+        expression: "val_loss"
         save_top_k: 5
         mode: "min"
+    precision: "16-mixed"
     accelerator: "auto"
     devices: "auto"
     num_nodes: 1
@@ -190,8 +204,9 @@ training:
       kwargs:
         process_group_backend: nccl
         find_unused_parameters: false
-    precision: "16-mixed"
-    val_every_n_units: 2000
-    log_every_n_steps: 1
-    num_sanity_val_steps: 1
     accumulate_grad_batches: 1
+    gradient_clip_val: 1.0
+  validation:
+    max_plots: 10
+
+inference: {}

@@ -10,7 +10,6 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
-from utils.hparams import hparams
 from utils.training_utils import get_latest_checkpoint_path
 
 
