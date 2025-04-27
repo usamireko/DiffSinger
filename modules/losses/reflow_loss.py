@@ -8,10 +8,10 @@ class RectifiedFlowLoss(nn.Module):
         super().__init__()
         self.loss_type = loss_type
         self.log_norm = log_norm
-        if self.loss_type == 'l1':
-            self.loss = nn.L1Loss(reduction='none')
-        elif self.loss_type == 'l2':
-            self.loss = nn.MSELoss(reduction='none')
+        if self.loss_type == "L1":
+            self.loss = nn.L1Loss(reduction="none")
+        elif self.loss_type == "L2":
+            self.loss = nn.MSELoss(reduction="none")
         else:
             raise NotImplementedError()
 
