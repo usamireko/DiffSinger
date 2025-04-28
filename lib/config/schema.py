@@ -548,13 +548,13 @@ class DataLoaderConfig(ConfigBaseModel):
 
 
 class OptimizerConfig(ConfigBaseModel):
-    cls: str = Field("torch.optim.AdamW")
+    cls: str = Field(...)
     kwargs: dict[str, Any] = Field(...)
 
 
 class LRSchedulerConfig(ConfigBaseModel):
-    unit: Literal["step", "epoch"] = Field("step")
-    cls: str = Field("torch.optim.lr_scheduler.StepLR")
+    unit: Literal["step", "epoch"] = Field(...)
+    cls: str = Field(...)
     kwargs: dict[str, Any] = Field(...)
 
     # noinspection PyMethodParameters
@@ -585,7 +585,7 @@ class PeriodicCheckpointConfig(ConfigBaseModel):
     })
     since_m_units: int = Field(0, ge=0)
     every_n_units: int = Field(...)
-    save_last_k: int = Field(2, ge=-1)
+    save_last_k: int = Field(1, ge=-1)
     weights_only: bool = Field(False)
 
 
@@ -610,13 +610,13 @@ class TrainerStrategyConfig(ConfigBaseModel):
 
 
 class TrainerConfig(ConfigBaseModel):
-    unit: Literal["step", "epoch"] = Field("step")
+    unit: Literal["step", "epoch"] = Field(...)
     min_steps: int = Field(0)
     max_steps: int = Field(160000)
     min_epochs: int = Field(0)
-    max_epochs: int = Field(100)
-    val_every_n_units: int = Field(2000, ge=1)
-    log_every_n_steps: int = Field(100)
+    max_epochs: int = Field(1000)
+    val_every_n_units: int = Field(..., ge=1)
+    log_every_n_steps: int = Field(100, ge=1)
     num_sanity_val_steps: int = Field(1)
     checkpoints: list[ModelCheckpointConfig] = Field(..., min_length=1)
     accelerator: str = Field("auto")
