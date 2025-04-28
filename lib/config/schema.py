@@ -578,22 +578,22 @@ class LRSchedulerConfig(ConfigBaseModel):
 
 
 class PeriodicCheckpointConfig(ConfigBaseModel):
-    prefix: str = Field("model_ckpt")
+    tag: str = Field(...)
     type: Literal["periodic"] = Field("periodic")
     unit: Literal["step", "epoch"] = Field(None, json_schema_extra={
         "dynamic_expr": coalesce(this(), ref("training.trainer.unit"))
     })
     since_m_units: int = Field(0, ge=0)
     every_n_units: int = Field(...)
-    save_last_k: int = Field(2)
+    save_last_k: int = Field(2, ge=-1)
     weights_only: bool = Field(False)
 
 
 class ExpressionCheckpointConfig(ConfigBaseModel):
-    prefix: str = Field("model_ckpt")
+    tag: str = Field(...)
     type: Literal["expression"] = Field("expression")
     expression: str = Field(...)
-    save_top_k: int = Field(5)
+    save_top_k: int = Field(5, ge=-1)
     mode: Literal["max", "min"] = Field(...)
     weights_only: bool = Field(False)
 
@@ -626,6 +626,16 @@ class TrainerConfig(ConfigBaseModel):
     precision: str = Field("16-mixed")
     accumulate_grad_batches: int = Field(1, ge=1)
     gradient_clip_val: float = Field(1.0, gt=0)
+
+    # noinspection PyMethodParameters
+    @field_validator("checkpoints")
+    def check_checkpoints(cls, v):
+        tags = set()
+        for checkpoint in v:
+            if checkpoint.tag in tags:
+                raise ValueError(f"Duplicate checkpoint tag: '{checkpoint.tag}'.")
+            tags.add(checkpoint.tag)
+        return v
 
 
 class VocoderConfig(ConfigBaseModel):

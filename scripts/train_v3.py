@@ -1,8 +1,8 @@
 import os
 import pathlib
+import re
 import shutil
 import sys
-
 
 root_dir = pathlib.Path(__file__).parent.parent.resolve()
 os.environ["PYTHONPATH"] = str(root_dir)
@@ -18,6 +18,11 @@ from lib.config.schema import (
     PeriodicCheckpointConfig, ExpressionCheckpointConfig,
 )
 
+__all__ = [
+    "find_latest_checkpoints",
+    "train_model",
+]
+
 
 def _load_and_log_config(config_path: pathlib.Path, scope: int, overrides: list[str] = None) -> RootConfig:
     config = load_raw_config(config_path, overrides)
@@ -28,6 +33,30 @@ def _load_and_log_config(config_path: pathlib.Path, scope: int, overrides: list[
     print(formatter.format(config.model))
     print(formatter.format(config.training))
     return config
+
+
+def find_latest_checkpoints(
+        ckpt_dir: pathlib.Path,
+        candidate_tags: list[str] = None
+) -> list[pathlib.Path]:
+    candidates = []
+    max_step = -1
+    for ckpt in ckpt_dir.glob("model-*-steps=*-epochs=*.ckpt"):
+        step = int(re.search(r"steps=(\d+)", ckpt.name).group(1))
+        if step > max_step:
+            max_step = step
+            candidates = [ckpt]
+        elif step == max_step:
+            candidates.append(ckpt)
+    for tag in candidate_tags or []:
+        filtered_candidates = []
+        for ckpt in candidates:
+            ckpt_tag = re.search(r"model-(.*?)-steps=", ckpt.name).group(1)
+            if tag == ckpt_tag:
+                filtered_candidates.append(ckpt)
+        if filtered_candidates:
+            return filtered_candidates
+    return candidates
 
 
 def train_model(
@@ -87,7 +116,7 @@ def train_model(
             ckpt_config: PeriodicCheckpointConfig
             checkpoint = PeriodicModelCheckpoint(
                 dirpath=ckpt_save_dir,
-                prefix=ckpt_config.prefix,
+                tag=ckpt_config.tag,
                 unit=ckpt_config.unit,
                 every_n_units=ckpt_config.every_n_units,
                 since_m_units=ckpt_config.since_m_units,
@@ -98,7 +127,7 @@ def train_model(
             ckpt_config: ExpressionCheckpointConfig
             checkpoint = ExpressionModelCheckpoint(
                 dirpath=ckpt_save_dir,
-                prefix=ckpt_config.prefix,
+                tag=ckpt_config.tag,
                 expression=ckpt_config.expression,
                 mode=ckpt_config.mode,
                 save_top_k=ckpt_config.save_top_k,
@@ -183,16 +212,21 @@ def main():
     help="Directory to save logs. If not specified, logs will be saved in the checkpoints directory."
 )
 @click.option(
+    "--restart", is_flag=True, default=False,
+    help="Ignore existing checkpoints and start training from scratch."
+)
+@click.option(
     "--resume-from", type=click.Path(
         exists=True, dir_okay=False, file_okay=True, readable=True, path_type=pathlib.Path
     ),
     required=False,
-    help="Resume training from this checkpoint."
+    help="Resume training from this specific checkpoint."
 )
 def _train_acoustic_model_cli(
         config: pathlib.Path, override: list[str],
         exp_name: str, work_dir: pathlib.Path,
         log_dir: pathlib.Path,
+        restart: bool,
         resume_from: pathlib.Path,
 ):
     config = _load_and_log_config(config, scope=ConfigurationScope.ACOUSTIC, overrides=override)
@@ -201,6 +235,22 @@ def _train_acoustic_model_cli(
         log_save_dir = ckpt_save_dir
     else:
         log_save_dir = log_dir / exp_name
+    if not restart and resume_from is None:
+        latest_checkpoints = find_latest_checkpoints(ckpt_save_dir, candidate_tags=[
+            ckpt_config.tag
+            for ckpt_config in config.training.trainer.checkpoints
+        ])
+        if len(latest_checkpoints) > 1:
+            raise ValueError(
+                f"Cannot perform auto resuming because multiple latest checkpoints were found:\n"
+                + "\n".join(f"  {ckpt}" for ckpt in latest_checkpoints)
+                + "\nPlease manually choose a specific checkpoint using --resume-from."
+            )
+        elif len(latest_checkpoints) == 1:
+            resume_from = latest_checkpoints[0]
+            print(f"Found latest checkpoint: {resume_from}")
+        else:
+            print("No checkpoints found. Starting training from scratch.")
     from training.acoustic_module import AcousticLightningModule
     train_model(
         config=config, pl_module_cls=AcousticLightningModule,

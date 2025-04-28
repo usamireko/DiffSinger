@@ -155,25 +155,25 @@ training:
     log_every_n_steps: 100
     num_sanity_val_steps: 1
     checkpoints:
-      - prefix: "model_ckpt_temp"
+      - tag: "best"
+        type: "expression"
+        expression: "total_loss"
+        save_top_k: 5
+        mode: "min"
+        weights_only: false
+      - tag: "temp"
         type: "periodic"
         unit: "step"
         every_n_units: 2000
         since_m_units: 0
         save_last_k: 2
         weights_only: false
-      - prefix: "model_ckpt_perm"
+      - tag: "perm"
         type: "periodic"
         unit: "step"
         every_n_units: 20000
         since_m_units: 80000
         save_last_k: -1
-        weights_only: false
-      - prefix: "model_ckpt"
-        type: "expression"
-        expression: "total_loss"
-        save_top_k: 5
-        mode: "min"
         weights_only: false
     precision: "16-mixed"
     accelerator: "auto"

@@ -16,7 +16,7 @@ class PeriodicModelCheckpoint(lightning.pytorch.callbacks.ModelCheckpoint):
     def __init__(
             self,
             dirpath: str,
-            prefix: str,
+            tag: str,
             unit: Literal["step", "epoch"],
             every_n_units: int,
             since_m_units: int = 0,
@@ -24,12 +24,10 @@ class PeriodicModelCheckpoint(lightning.pytorch.callbacks.ModelCheckpoint):
             save_weights_only: bool = False,
     ):
         if unit == "step":
-            filename = f"{prefix}-steps={{step:07d}}"
             every_n_train_steps = every_n_units
             every_n_epochs = None
             save_on_epoch_end = False
         elif unit == "epoch":
-            filename = f"{prefix}-epochs={{epoch:04d}}"
             every_n_train_steps = None
             every_n_epochs = every_n_units
             save_on_epoch_end = True
@@ -37,7 +35,7 @@ class PeriodicModelCheckpoint(lightning.pytorch.callbacks.ModelCheckpoint):
             raise ValueError(f"Unit must be 'step' or 'epoch', got '{unit}'.")
         super().__init__(
             dirpath=dirpath,
-            filename=filename,
+            filename=f"model-{tag}-steps={{step:07d}}-epochs={{epoch:04d}}",
             verbose=True,
             save_last=False,
             save_top_k=-1,
@@ -81,12 +79,6 @@ class PeriodicModelCheckpoint(lightning.pytorch.callbacks.ModelCheckpoint):
             return
         super().on_train_epoch_end(trainer, pl_module)
 
-    def format_checkpoint_name(self, metrics: dict[str, Tensor], *args, **kwargs) -> str:
-        if self.unit == "epoch":
-            metrics = metrics.copy()
-            metrics["epoch"] += 1
-        return super().format_checkpoint_name(metrics, *args, **kwargs)
-
     def _save_checkpoint(
             self,
             trainer: lightning.pytorch.Trainer,
@@ -123,7 +115,7 @@ class ExpressionModelCheckpoint(lightning.pytorch.callbacks.ModelCheckpoint):
     def __init__(
             self,
             dirpath: str,
-            prefix: str,
+            tag: str,
             expression: str,
             mode: Literal["min", "max"],
             save_top_k: int = 1,
@@ -139,7 +131,7 @@ class ExpressionModelCheckpoint(lightning.pytorch.callbacks.ModelCheckpoint):
         metric_key = f"expr_{base64.b16encode(expression.encode('utf8')).decode()}"
         super().__init__(
             dirpath=dirpath,
-            filename=f"{prefix}-{metric_name}={{{metric_key}:06.3f}}",
+            filename=f"model-{tag}-steps={{step:07d}}-epochs={{epoch:04d}}-{metric_name}={{{metric_key}:06.3f}}",
             monitor=metric_key,
             verbose=False,
             save_last=False,
