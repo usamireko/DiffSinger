@@ -553,9 +553,28 @@ class OptimizerConfig(ConfigBaseModel):
 
 
 class LRSchedulerConfig(ConfigBaseModel):
-    cls: str = Field("torch.optim.lr_scheduler.StepLR")
     unit: Literal["step", "epoch"] = Field("step")
+    cls: str = Field("torch.optim.lr_scheduler.StepLR")
     kwargs: dict[str, Any] = Field(...)
+
+    # noinspection PyMethodParameters
+    @field_validator("kwargs")
+    def check_kwargs(cls, v):
+        res = {}
+        for key, value in v.items():
+            if isinstance(value, dict):
+                if "cls" in value:
+                    value.setdefault("kwargs", {})
+                    value = LRSchedulerConfig.model_validate(value)
+                else:
+                    value = LRSchedulerConfig.check_kwargs(value)
+            elif isinstance(value, list):
+                value = [
+                    LRSchedulerConfig.model_validate(item) if isinstance(item, dict) and "cls" in item else item
+                    for item in value
+                ]
+            res[key] = value
+        return res
 
 
 class PeriodicCheckpointConfig(ConfigBaseModel):

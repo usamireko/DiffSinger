@@ -165,8 +165,8 @@ training:
       betas: [0.9, 0.98]
       weight_decay: 0
   lr_scheduler:
-    cls: torch.optim.lr_scheduler.StepLR
     unit: "step"
+    cls: torch.optim.lr_scheduler.StepLR
     kwargs:
       step_size: 50000
       gamma: 0.5
