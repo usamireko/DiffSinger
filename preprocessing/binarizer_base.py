@@ -23,7 +23,6 @@ from modules.commons.tts_modules import LengthRegulator
 from utils.indexed_datasets import IndexedDatasetBuilder
 from utils.infer_utils import resample_align_curve
 from utils.multiprocess_utils import chunked_multiprocess_run
-from lib.vocabulary import PhonemeDictionary
 from utils.plot import distribution_to_figure
 
 

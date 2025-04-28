@@ -106,9 +106,9 @@ class AcousticBinarizer(BaseBinarizer):
         if self.config.features.tension.used:
             data["tension"] = tension
             variance_names.append("tension")
-        length, data = dask.compute(length, data)
+        length, uv, data = dask.compute(length, uv, data)
 
-        if uv.compute().all():
+        if uv.all():
             print(f"Skipped \'{item.item_name}\': empty gt f0")
             return []
         sample = DataSample(
@@ -168,7 +168,7 @@ class AcousticBinarizer(BaseBinarizer):
         for ori_idx, shift, speed in augmentation_params:
             mel_transform, length_transform = self.get_mel(waveform, shift=shift, speed=speed)
             ph_dur_transform = self.sec_dur_to_frame_dur(ph_dur_sec / speed, length_transform)
-            f0_transform = self.resize_curve(f0.compute() * 2 ** (shift / 12), length_transform)
+            f0_transform = self.resize_curve(data["f0"] * 2 ** (shift / 12), length_transform)
             v_transform = {
                 v_name: self.resize_curve(data[v_name], length_transform)
                 for v_name in variance_names

@@ -290,9 +290,9 @@ class VarianceBinarizer(BaseBinarizer):
         if self.config.features.tension.used:
             data["tension"] = tension
             variance_names.append("tension")
-        (data,) = dask.compute(data)
+        uv, data = dask.compute(uv, data)
 
-        if uv.compute().all():
+        if uv.all():
             print(f"Skipped \'{item.item_name}\': empty gt f0")
             return []
         sample = DataSample(

@@ -115,8 +115,9 @@ class DurationBinarizer(BaseBinarizer):
             "ph_midi": ph_midi,
             "ph2word": ph2word,
         }
-        (data,) = dask.compute(data)
-        if uv.compute().all():
+        uv, data = dask.compute(uv, data)
+
+        if uv.all():
             print(f"Skipped \'{item.item_name}\': empty gt f0")
             return []
         sample = DataSample(
