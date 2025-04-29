@@ -117,6 +117,16 @@ class SwiGLU(nn.Module):
         return out * F.silu(gate)
 
 
+class Transpose(nn.Module):
+    def __init__(self, dims):
+        super().__init__()
+        assert len(dims) == 2, 'dims must be a tuple of two dimensions'
+        self.dims = dims
+
+    def forward(self, x):
+        return x.transpose(*self.dims)
+
+
 class TransformerFFNLayer(nn.Module):
     def __init__(self, hidden_size, filter_size, kernel_size=1, dropout=0., act='gelu'):
         super().__init__()

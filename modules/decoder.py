@@ -5,24 +5,15 @@ from torch import nn
 
 from lib.config.schema import DiffusionDecoderConfig
 from utils import filter_kwargs
-from .aux_decoder import ConvNeXtDecoder
-from .backbone import WaveNet, LYNXNet
+from .aux_decoder import AUX_DECODERS
+from .backbone import BACKBONES
 from .core import RectifiedFlow
+from .normalizer import FeatureNormalizer
 
 __all__ = [
     "DiffusionDecoder",
     "ShallowDiffusionOutput",
 ]
-
-from .normalizer import FeatureNormalizer
-
-AUX_DECODERS = {
-    "convnext": ConvNeXtDecoder,
-}
-BACKBONES = {
-    'wavenet': WaveNet,
-    'lynxnet': LYNXNet,
-}
 
 
 @dataclass

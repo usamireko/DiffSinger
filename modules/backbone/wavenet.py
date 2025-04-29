@@ -81,7 +81,7 @@ class WaveNet(nn.Module):
         :param cond: [B, H, T]
         :return:
         """
-        x = spec.squeeze(1)  # [B, M, T]
+        x = spec[:, 0]  # [B, M, T]
         x = self.input_projection(x)  # [B, C, T]
 
         x = F.relu(x)

@@ -7,7 +7,7 @@ from .commons.common_layers import (
     NormalInitEmbedding as Embedding,
     XavierUniformInitLinear as Linear,
 )
-from modules.commons.tts_modules import FastSpeech2Encoder
+from .commons.tts_modules import FastSpeech2Encoder
 
 __all__ = [
     "LinguisticEncoder",

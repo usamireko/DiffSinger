@@ -6,8 +6,8 @@ from typing import Literal
 import torch
 
 from lib.config.schema import VocoderConfig
-from modules.nsf_hifigan.env import AttrDict
-from modules.nsf_hifigan.models import Generator
+from .nsf_hifigan.env import AttrDict
+from .nsf_hifigan.models import Generator
 
 
 class Vocoder(abc.ABC):

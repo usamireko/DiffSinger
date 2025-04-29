@@ -5,10 +5,10 @@ from .commons.common_layers import (
     NormalInitEmbedding as Embedding,
     XavierUniformInitLinear as Linear,
 )
+from .commons.tts_modules import LocalUpsample
 from .decoder import DiffusionDecoder, ShallowDiffusionOutput
 from .embedding import ParameterEmbeddings
 from .encoder import LinguisticEncoder, MelodyEncoder
-from modules.commons.tts_modules import LocalUpsample
 from .normalizer import FeatureNormalizer
 
 __all__ = [
