@@ -239,6 +239,7 @@ def _train_acoustic_model_cli(
         latest_checkpoints = find_latest_checkpoints(ckpt_save_dir, candidate_tags=[
             ckpt_config.tag
             for ckpt_config in config.training.trainer.checkpoints
+            if not ckpt_config.weights_only  # weights_only checkpoints cannot be resumed from
         ])
         if len(latest_checkpoints) > 1:
             raise ValueError(

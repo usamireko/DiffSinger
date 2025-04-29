@@ -635,6 +635,8 @@ class TrainerConfig(ConfigBaseModel):
             if checkpoint.tag in tags:
                 raise ValueError(f"Duplicate checkpoint tag: '{checkpoint.tag}'.")
             tags.add(checkpoint.tag)
+        if all(c.weights_only for c in v):
+            raise ValueError("At least one checkpoint should set weights_only to False.")
         return v
 
 
