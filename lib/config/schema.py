@@ -549,6 +549,7 @@ class DataLoaderConfig(ConfigBaseModel):
 
 class OptimizerConfig(ConfigBaseModel):
     cls: str = Field(...)
+    wraps: Literal["parameters", "module"] = Field("parameters")
     kwargs: dict[str, Any] = Field(...)
 
 

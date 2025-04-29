@@ -9,7 +9,7 @@ from torch import nn
 from torchmetrics import Metric, MeanMetric
 
 from lib.config.schema import ModelConfig, TrainingConfig
-from lib.reflection import build_object_from_class_name, build_lr_scheduler_from_config
+from lib.reflection import build_optimizer_from_config, build_lr_scheduler_from_config
 from .dataset import BaseDataset, DynamicBatchSampler
 
 
@@ -176,12 +176,7 @@ class BaseLightningModule(lightning.pytorch.LightningModule, abc.ABC):
         self.logger.log_metrics({f"metrics/{k}": v for k, v in metric_vals.items()}, step=self.global_step)
 
     def configure_optimizers(self):
-        optimizer = build_object_from_class_name(
-            self.training_config.optimizer.cls,
-            torch.optim.Optimizer,
-            self.model.parameters(),
-            **self.training_config.optimizer.kwargs
-        )
+        optimizer = build_optimizer_from_config(self.model, self.training_config.optimizer)
         scheduler = build_lr_scheduler_from_config(optimizer, self.training_config.lr_scheduler)
         return {
             "optimizer": optimizer,

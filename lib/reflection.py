@@ -4,7 +4,17 @@ from typing import Any
 
 import torch.optim
 
-from lib.config.schema import LRSchedulerConfig
+from .config.schema import LRSchedulerConfig, OptimizerConfig
+
+
+def get_object_by_module_path(path: str):
+    """
+    Get an object by module path. The path should be in the format like 'module.submodule.name'.
+    """
+    module_name, class_name = path.rsplit(".", 1)
+    module = importlib.import_module(module_name)
+    obj = getattr(module, class_name)
+    return obj
 
 
 def filter_kwargs_by_class(cls: type, kwargs: dict[str, Any]):
@@ -29,15 +39,36 @@ def build_object_from_class_name(cls_name: str, required_parent_cls=None, /, *ar
     Build an object from a class name. The class name should be in the format 'module.ClassName'.
     If `required_parent_cls` is specified, the class should be a subclass of required_parent_cls.
     """
-    module_name, class_name = cls_name.rsplit(".", 1)
-    module = importlib.import_module(module_name)
-    cls = getattr(module, class_name)
+    cls = get_object_by_module_path(cls_name)
     if required_parent_cls and not issubclass(cls, required_parent_cls):
         raise TypeError(f"Class {cls_name} is not a subclass of {required_parent_cls.__name__}.")
     return cls(*args, **filter_kwargs_by_class(cls, kwargs))
 
 
-def build_lr_scheduler_from_config(optimizer: torch.optim.Optimizer, config: LRSchedulerConfig):
+def build_optimizer_from_config(
+        module: torch.nn.Module, config: OptimizerConfig
+) -> torch.optim.Optimizer:
+    """
+    Build an optimizer from a configuration object, recursively.
+    """
+    if config.wraps == "parameters":
+        wrapped = module.parameters()
+    elif config.wraps == "module":
+        wrapped = module
+    else:
+        raise ValueError(f"Optimizer must wrap 'parameters' or 'module', got '{config.wraps}'.")
+    optimizer = build_object_from_class_name(
+        config.cls,
+        torch.optim.Optimizer,
+        wrapped,
+        **config.kwargs
+    )
+    return optimizer
+
+
+def build_lr_scheduler_from_config(
+        optimizer: torch.optim.Optimizer, config: LRSchedulerConfig
+) -> torch.optim.lr_scheduler.LRScheduler:
     """
     Build a learning rate scheduler from a configuration object, recursively.
     """
