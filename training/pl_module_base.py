@@ -74,7 +74,7 @@ class BaseLightningModule(lightning.pytorch.LightningModule, abc.ABC):
                     parameter.requires_grad = False
                     frozen_count += 1
                     break
-        rank_zero_info(f"Frozen {frozen_count} parameter(s).")
+        rank_zero_info(f"Freezing {frozen_count} parameter(s).")
 
     def load_from_pretrained_model(self, pretrained_model_path: pathlib.Path):
         source_state_dict = torch.load(pretrained_model_path, map_location=self.device)["state_dict"]
