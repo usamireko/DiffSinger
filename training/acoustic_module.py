@@ -27,7 +27,6 @@ class AcousticLightningModule(BaseLightningModule):
 
     def build_losses_and_metrics(self):
         if self.model_config.spec_decoder.use_shallow_diffusion:
-            self.validation_losses["aux_spec_loss"] = MeanMetric()
             aux_loss_type = self.training_config.loss.spec_decoder.aux_loss_type
             if aux_loss_type == "L1":
                 aux_spec_loss = nn.L1Loss()
@@ -35,8 +34,7 @@ class AcousticLightningModule(BaseLightningModule):
                 aux_spec_loss = nn.MSELoss()
             else:
                 raise ValueError("Invalid spec_decoder.aux_loss_type")
-            self.losses["aux_spec_loss"] = aux_spec_loss
-        self.validation_losses["diff_spec_loss"] = MeanMetric()
+            self.register_loss("aux_spec_loss", aux_spec_loss)
         main_loss_type = self.training_config.loss.spec_decoder.main_loss_type
         if main_loss_type not in ["L1", "L2"]:
             raise ValueError("Invalid spec_decoder.main_loss_type")
@@ -44,7 +42,7 @@ class AcousticLightningModule(BaseLightningModule):
             loss_type=main_loss_type,
             log_norm=self.training_config.loss.spec_decoder.main_loss_log_norm
         )
-        self.losses["diff_spec_loss"] = diff_spec_loss
+        self.register_loss("diff_spec_loss", diff_spec_loss)
         # noinspection PyAttributeOutsideInit
         self.logged_gt_wav_indices = set()
 

@@ -25,12 +25,12 @@ class BaseLightningModule(lightning.pytorch.LightningModule, abc.ABC):
         self.model_config = model_config
         self.training_config = training_config
         self.model: nn.Module = None
+        self.build_model()
         self.losses = nn.ModuleDict()
-        self.validation_losses: dict[str, Metric] = {
+        self.metrics = nn.ModuleDict()
+        self.val_losses: dict[str, Metric] = {  # use built-in dict to not be printed in the model summary
             "total_loss": MeanMetric()
         }
-        self.validation_metrics: dict[str, Metric] = {}
-        self.build_model()
         self.build_losses_and_metrics()
         # TODO: from pretrained model and freezing parameters
         if len(self.losses) == 0:
@@ -57,9 +57,25 @@ class BaseLightningModule(lightning.pytorch.LightningModule, abc.ABC):
     def plot_validation_results(self, sample: dict[str, torch.Tensor], outputs: dict[str, torch.Tensor]):
         pass
 
+    @rank_zero_only
+    def print_arch(self):
+        print(f"Model: {self.model}")
+        print(f"Losses: {self.losses}")
+
+    def register_loss(self, name: str, loss: nn.Module):
+        if name in self.losses:
+            raise ValueError(f"Loss '{name}' already registered.")
+        self.losses[name] = loss
+        self.val_losses[name] = MeanMetric()  # for validation logging
+
+    def register_metric(self, name: str, metric: Metric):
+        if name in self.metrics:
+            raise ValueError(f"Metric '{name}' already registered.")
+        self.metrics[name] = metric
+
     def setup(self, stage: str) -> None:
         if stage != "fit":
-            raise ValueError("This data module only supports the 'fit' stage.")
+            raise ValueError("This module only supports the 'fit' stage.")
         self.train_dataset = BaseDataset(self.binary_data_dir, "train")
         self.valid_dataset = BaseDataset(self.binary_data_dir, "valid")
 
@@ -126,10 +142,8 @@ class BaseLightningModule(lightning.pytorch.LightningModule, abc.ABC):
         return total_loss
 
     def on_validation_epoch_start(self):
-        for metric in self.validation_metrics.values():
-            metric.to(self.device)
-            metric.reset()
-        for metric in self.validation_losses.values():
+        for metric in self.val_losses.values():
+            # self.val_losses is a built-in dict, so we need to move them to device manually
             metric.to(self.device)
             metric.reset()
 
@@ -143,37 +157,37 @@ class BaseLightningModule(lightning.pytorch.LightningModule, abc.ABC):
                 outputs = self.forward_model(sample, infer=True)
                 save_obj["sample"] = sample
                 save_obj["outputs"] = outputs
+                filename = f"validation_{self.global_step}_{batch_index}.pt"
+                torch.save(
+                    obj=save_obj,
+                    f=pathlib.Path(self.logger.log_dir) / filename
+                )
             losses = {
                 "total_loss": sum(losses.values()),
                 **losses,
             }
-            save_obj["losses"] = losses
-            save_obj["weight"] = sample["size"]
-        filename = f"validation_{self.global_step}_{batch_index}.pt"
-        torch.save(
-            obj=save_obj,
-            f=pathlib.Path(self.logger.log_dir) / filename
-        )
+            for k, v in losses.items():
+                self.val_losses[k].update(v, weight=sample["size"])
 
     def on_validation_epoch_end(self):
+        loss_vals = {k: v.compute() for k, v in self.val_losses.items()}
+        metric_vals = {k: v.compute() for k, v in self.metrics.items()}
+        self.log_dict(
+            {**loss_vals, **metric_vals},
+            on_epoch=True, prog_bar=False, logger=False, sync_dist=False
+        )
+        if self.global_rank != 0:
+            return
+        self.logger.log_metrics({f"validation/{k}": v for k, v in loss_vals.items()}, step=self.global_step)
+        self.logger.log_metrics({f"metrics/{k}": v for k, v in metric_vals.items()}, step=self.global_step)
         filelist = list(pathlib.Path(self.logger.log_dir).glob(f"validation_{self.global_step}_*.pt"))
         with torch.autocast(self.device.type, enabled=False):
             for file in tqdm.tqdm(filelist, desc="Plotting", leave=False):
                 obj = torch.load(file, map_location=self.device)
-                losses = obj["losses"]
-                weight = obj["weight"]
-                for k, v in losses.items():
-                    self.validation_losses[k].update(v, weight=weight)
-                if "outputs" in obj:
-                    sample = obj["sample"]
-                    outputs = obj["outputs"]
-                    self.plot_validation_results(sample, outputs)
+                sample = obj["sample"]
+                outputs = obj["outputs"]
+                self.plot_validation_results(sample, outputs)
                 file.unlink()
-            loss_vals = {k: v.compute() for k, v in self.validation_losses.items()}
-            metric_vals = {k: v.compute() for k, v in self.validation_metrics.items()}
-        self.log("val_loss", loss_vals["total_loss"], on_epoch=True, prog_bar=True, logger=False, sync_dist=True)
-        self.logger.log_metrics({f"validation/{k}": v for k, v in loss_vals.items()}, step=self.global_step)
-        self.logger.log_metrics({f"metrics/{k}": v for k, v in metric_vals.items()}, step=self.global_step)
 
     def configure_optimizers(self):
         optimizer = build_optimizer_from_config(self.model, self.training_config.optimizer)
@@ -186,8 +200,3 @@ class BaseLightningModule(lightning.pytorch.LightningModule, abc.ABC):
                 "frequency": 1
             }
         }
-
-    @rank_zero_only
-    def print_arch(self):
-        print(f"Model: {self.model}")
-        print(f"Losses: {self.losses}")
