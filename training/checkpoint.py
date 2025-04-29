@@ -9,8 +9,6 @@ import torch
 from lightning_utilities.core.rank_zero import rank_zero_only
 from torch import Tensor
 
-from training.pl_module_base import BaseLightningModule
-
 
 class PeriodicModelCheckpoint(lightning.pytorch.callbacks.ModelCheckpoint):
     def __init__(
@@ -149,16 +147,11 @@ class ExpressionModelCheckpoint(lightning.pytorch.callbacks.ModelCheckpoint):
             trainer: lightning.pytorch.Trainer,
             monitor_candidates: dict[str, Tensor]
     ) -> None:
-        pl_module: BaseLightningModule = trainer.lightning_module
-        candidates = {
-            **{k: v.compute() for k, v in pl_module.validation_losses.items()},
-            **{k: v.compute() for k, v in pl_module.validation_metrics.items()},
-        }
-        eval_result = self.expression.evalf(subs=candidates)
+        eval_result = self.expression.evalf(subs=monitor_candidates)
         if not isinstance(eval_result, sympy.Number):
             raise ValueError(
                 f"Expression '{self.expression}' not fully evaluated. "
-                f"Valid candidates: {list(candidates.keys())}"
+                f"Valid candidates: {list(monitor_candidates.keys())}"
             )
         eval_result = torch.tensor(float(eval_result), dtype=torch.float32)
         monitor_candidates[self.metric_key] = eval_result
