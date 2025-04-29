@@ -261,7 +261,9 @@ class BaseBinarizer(abc.ABC):
                 for idx in ph_idx_required.difference(ph_idx_occurred)
             }, key=lambda v: v[0] if isinstance(v, tuple) else v)
             raise RuntimeError(
-                f"The following phonemes are not covered in transcriptions: {missing_phones}"
+                f"The following phonemes are not covered in transcriptions: {missing_phones}\n"
+                "If you are fine-tuning from a pre-trained model or you don't want to support these phonemes, "
+                "consider using --coverage-check-option bypass or --coverage-check-option compact.\n"
             )
 
     def free_lazy_modules(self):
