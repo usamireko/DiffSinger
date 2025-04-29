@@ -48,7 +48,7 @@ class RequiredOnGivenScope(DynamicCheck):
 class DataSourceConfig(ConfigBaseModel):
     raw_data_dir: str = Field(...)
     speaker: str = Field(...)
-    spk_id: int = Field(None, ge=0)
+    spk_id: int | None = Field(None, ge=0)
     language: str = Field(..., json_schema_extra={
         "dynamic_check": DynamicCheck(
             expr=in_(this(), ref("data.dictionaries")),
@@ -144,7 +144,7 @@ class DataConfig(ConfigBaseModel):
 
 class PitchExtractionConfig(ConfigBaseModel):
     method: Literal["parselmouth", "harvest", "rmvpe"] = Field("rmvpe")
-    model_path: str = Field(None)
+    model_path: str | None = Field(None)
     f0_min: float = Field(65, ge=0)
     f0_max: float = Field(1100, ge=0, json_schema_extra={
         "dynamic_check": DynamicCheck(
@@ -156,7 +156,7 @@ class PitchExtractionConfig(ConfigBaseModel):
 
 class HarmonicNoiseSeparationConfig(ConfigBaseModel):
     method: Literal["world", "vr"] = Field("vr")
-    model_path: str = Field(None)
+    model_path: str | None = Field(None)
 
 
 class BinarizerExtractorsConfig(ConfigBaseModel):
@@ -557,7 +557,7 @@ class LRSchedulerConfig(ConfigBaseModel):
     cls: str = Field(...)
     kwargs: dict[str, Any] = Field(...)
     unit: Literal["step", "epoch"] = Field(...)
-    monitor: str = Field(None)
+    monitor: str | None = Field(None)
 
     # noinspection PyMethodParameters
     @field_validator("kwargs")
@@ -692,6 +692,20 @@ class ValidationConfig(ConfigBaseModel):
     })
 
 
+class FinetuningConfig(ConfigBaseModel):
+    pretraining_enabled: bool = Field(False)
+    pretraining_from: str | None = Field(None, json_schema_extra={
+        "dynamic_check": DynamicCheck(
+            expr=if_(ref("training.finetuning.pretraining_enabled"), exists(this()), True),
+            message="pretraining_from must be specified if pretraining_enabled is True."
+        )
+    })
+    pretraining_include_params: list[str] = Field(["model.*"])
+    pretraining_exclude_params: list[str] = Field([])
+    freezing_enabled: bool = Field(False)
+    frozen_params: list[str] = Field([])
+
+
 class TrainingConfig(ConfigBaseModel):
     loss: LossConfig = Field(...)
     dataloader: DataLoaderConfig = Field(...)
@@ -699,6 +713,7 @@ class TrainingConfig(ConfigBaseModel):
     lr_scheduler: LRSchedulerConfig = Field(...)
     trainer: TrainerConfig = Field(...)
     validation: ValidationConfig = Field(...)
+    finetuning: FinetuningConfig = Field(...)
 
 
 class InferenceConfig(ConfigBaseModel):

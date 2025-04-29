@@ -1,10 +1,11 @@
 import abc
 import pathlib
+from fnmatch import fnmatch
 
 import lightning.pytorch
 import torch
 import tqdm
-from lightning_utilities.core.rank_zero import rank_zero_only
+from lightning_utilities.core.rank_zero import rank_zero_info
 from torch import nn
 from torchmetrics import Metric, MeanMetric
 
@@ -32,9 +33,9 @@ class BaseLightningModule(lightning.pytorch.LightningModule, abc.ABC):
             "total_loss": MeanMetric()
         }
         self.build_losses_and_metrics()
-        # TODO: from pretrained model and freezing parameters
         if len(self.losses) == 0:
             raise ValueError("No losses defined.")
+        self.freeze_parameters()  # caution: this can break when resuming training
         self.print_arch()
         self.train_dataset: BaseDataset = None
         self.valid_dataset: BaseDataset = None
@@ -57,11 +58,64 @@ class BaseLightningModule(lightning.pytorch.LightningModule, abc.ABC):
     def plot_validation_results(self, sample: dict[str, torch.Tensor], outputs: dict[str, torch.Tensor]):
         pass
 
-    @rank_zero_only
     def print_arch(self):
-        print(f"Model: {self.model}")
-        print(f"Losses: {self.losses}")
-        print(f"Metrics: {self.metrics}")
+        rank_zero_info(f"Model: {self.model}")
+        rank_zero_info(f"Losses: {self.losses}")
+        rank_zero_info(f"Metrics: {self.metrics}")
+
+    def freeze_parameters(self):
+        if not self.training_config.finetuning.freezing_enabled:
+            return
+        frozen_count = 0
+        frozen_param_patterns = self.training_config.finetuning.frozen_params
+        for name, parameter in self.named_parameters():
+            for pattern in frozen_param_patterns:
+                if fnmatch(name, pattern):
+                    parameter.requires_grad = False
+                    frozen_count += 1
+                    break
+        rank_zero_info(f"Frozen {frozen_count} parameter(s).")
+
+    def load_from_pretrained_model(self, pretrained_model_path: pathlib.Path):
+        source_state_dict = torch.load(pretrained_model_path, map_location=self.device)["state_dict"]
+        includes = self.training_config.finetuning.pretraining_include_params
+        excludes = self.training_config.finetuning.pretraining_exclude_params
+        if includes:
+            include_names = set()
+            for pattern in includes:
+                include_names.update(
+                    name for name in source_state_dict.keys() if fnmatch(name, pattern)
+                )
+            source_state_dict = {k: v for k, v in source_state_dict.items() if k in include_names}
+        if excludes:
+            exclude_names = set()
+            for pattern in excludes:
+                exclude_names.update(
+                    name for name in source_state_dict.keys() if fnmatch(name, pattern)
+                )
+            source_state_dict = {k: v for k, v in source_state_dict.items() if k not in exclude_names}
+        target_state_dict = self.state_dict()
+        errors = []
+        for name in list(source_state_dict.keys()):
+            if name not in target_state_dict:
+                del source_state_dict[name]
+            source_param = source_state_dict[name]
+            target_param = target_state_dict[name]
+            if source_param.shape != target_param.shape:
+                errors.append((name, tuple(source_param.shape), tuple(target_param.shape)))
+                del source_state_dict[name]
+        if errors:
+            raise RuntimeError(
+                f"Pretrained model '{pretrained_model_path}' has {len(errors)} mismatched parameter(s):\n"
+                + "\n".join(
+                    f"  {name}: source {source_shape}, target {target_shape}"
+                    for name, source_shape, target_shape in errors
+                )
+            )
+        self.load_state_dict(source_state_dict, strict=False)
+        rank_zero_info(
+            f"Loaded {len(source_state_dict)} parameter(s) from '{pretrained_model_path}'"
+        )
 
     def register_loss(self, name: str, loss: nn.Module):
         if name in self.losses:

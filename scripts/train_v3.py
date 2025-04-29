@@ -97,6 +97,8 @@ def train_model(
     training_config = config.training
 
     pl_module = pl_module_cls(binary_data_dir, model_config, training_config)
+    if resume_from is None and training_config.finetuning.pretraining_enabled:
+        pl_module.load_from_pretrained_model(training_config.finetuning.pretraining_from)
 
     if training_config.trainer.unit == "step":
         val_check_interval = (
@@ -213,7 +215,7 @@ def main():
 )
 @click.option(
     "--restart", is_flag=True, default=False,
-    help="Ignore existing checkpoints and start training from scratch."
+    help="Ignore existing checkpoints and start new training."
 )
 @click.option(
     "--resume-from", type=click.Path(
@@ -251,7 +253,7 @@ def _train_acoustic_model_cli(
             resume_from = latest_checkpoints[0]
             print(f"Found latest checkpoint: {resume_from}")
         else:
-            print("No checkpoints found. Starting training from scratch.")
+            print("No checkpoints found. Starting new training.")
     from training.acoustic_module import AcousticLightningModule
     train_model(
         config=config, pl_module_cls=AcousticLightningModule,
