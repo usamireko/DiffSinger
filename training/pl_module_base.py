@@ -131,8 +131,6 @@ class BaseLightningModule(lightning.pytorch.LightningModule, abc.ABC):
             **losses,
             "batch_size": sample["size"],
         }
-        # log total_loss silently for ReduceLROnPlateau scheduler to track
-        self.log("total_loss", total_loss, prog_bar=False, logger=False, on_step=True, on_epoch=False)
         # logs to progress bar
         self.log_dict(log_outputs, prog_bar=True, logger=False, on_step=True, on_epoch=False)
         self.log("lr", self.lr_schedulers().get_last_lr()[0], prog_bar=True, logger=False, on_step=True, on_epoch=False)
@@ -196,31 +194,20 @@ class BaseLightningModule(lightning.pytorch.LightningModule, abc.ABC):
         scheduler = build_lr_scheduler_from_config(optimizer, self.training_config.lr_scheduler)
         interval = self.training_config.lr_scheduler.unit
         if isinstance(scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
+            if interval != self.training_config.trainer.unit:
+                # ReduceLROnPlateau requires the scheduler to synchronize with the validation period
+                raise ValueError(
+                    f"ReduceLROnPlateau scheduler requires training.lr_scheduler.unit and training.trainer.unit "
+                    f"to be the same, got '{interval}' and '{self.training_config.trainer.unit}'."
+                )
+            # Call scheduler.step() after each validation
+            frequency = self.training_config.trainer.val_every_n_units
             monitor = self.training_config.lr_scheduler.monitor
-            if interval == self.training_config.trainer.unit:
-                # scheduler synchronizes with validation period, track validation losses or metrics
-                frequency = self.training_config.trainer.val_every_n_units
-                if monitor not in self.val_losses and monitor not in self.metrics:
-                    raise ValueError(
-                        f"Invalid monitor '{monitor}' for ReduceLROnPlateau scheduler. Should be one of "
-                        f"losses {list(self.val_losses.keys())} or metrics {list(self.metrics.keys())}."
-                    )
-            else:
-                # scheduler does not synchronize with validation period, track training losses
-                frequency = 1
-                if monitor not in self.losses and monitor != "total_loss":
-                    if monitor in self.val_losses or monitor in self.metrics:
-                        raise ValueError(
-                            f"Only training losses can be monitored when using a ReduceLROnPlateau scheduler "
-                            f"that is not synchronized with validation period, "
-                            f"however getting a validation-only monitor \'{monitor}\'. "
-                            f"Consider setting training.lr_scheduler.unit to the same as training.trainer.unit."
-                        )
-                    else:
-                        raise ValueError(
-                            f"Invalid monitor '{monitor}' for ReduceLROnPlateau scheduler. "
-                            f"Should be one of training losses {list(self.val_losses.keys())} or 'total_loss'."
-                        )
+            if monitor not in self.val_losses and monitor not in self.metrics:
+                raise ValueError(
+                    f"Invalid monitor '{monitor}' for ReduceLROnPlateau scheduler. Should be one of "
+                    f"losses {list(self.val_losses.keys())} or metrics {list(self.metrics.keys())}."
+                )
         else:
             frequency = 1
             monitor = None
