@@ -61,6 +61,7 @@ class BaseLightningModule(lightning.pytorch.LightningModule, abc.ABC):
     def print_arch(self):
         print(f"Model: {self.model}")
         print(f"Losses: {self.losses}")
+        print(f"Metrics: {self.metrics}")
 
     def register_loss(self, name: str, loss: nn.Module):
         if name in self.losses:
