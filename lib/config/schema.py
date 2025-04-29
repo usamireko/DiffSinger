@@ -554,9 +554,10 @@ class OptimizerConfig(ConfigBaseModel):
 
 
 class LRSchedulerConfig(ConfigBaseModel):
-    unit: Literal["step", "epoch"] = Field(...)
     cls: str = Field(...)
     kwargs: dict[str, Any] = Field(...)
+    unit: Literal["step", "epoch"] = Field(...)
+    monitor: str = Field(None)
 
     # noinspection PyMethodParameters
     @field_validator("kwargs")

@@ -1,7 +1,6 @@
 import torch
 from lightning.pytorch.loggers import TensorBoardLogger
 from torch import nn
-from torchmetrics import MeanMetric
 
 from modules.decoder import ShallowDiffusionOutput
 from modules.losses import RectifiedFlowLoss
