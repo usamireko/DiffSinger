@@ -234,7 +234,7 @@ def _train_acoustic_model_cli(
         log_save_dir = ckpt_save_dir
     else:
         log_save_dir = log_dir / exp_name
-    msg = None
+    message = None
     if not restart and resume_from is None:
         latest_checkpoints = find_latest_checkpoints(ckpt_save_dir, candidate_tags=[
             ckpt_config.tag
@@ -249,17 +249,21 @@ def _train_acoustic_model_cli(
             )
         elif len(latest_checkpoints) == 1:
             resume_from = latest_checkpoints[0]
-            msg = f"Found latest checkpoint: {resume_from}"
+            message = f"Found latest checkpoint: {resume_from}"
         else:
-            msg = "No checkpoints found. Starting new training."
+            message = "No checkpoints found. Starting new training."
 
-    from lightning_utilities.core.rank_zero import rank_zero_info
-    formatter = ModelFormatter()
-    rank_zero_info(formatter.format(config.model))
-    rank_zero_info(formatter.format(config.training))
+    from lightning_utilities.core.rank_zero import rank_zero_only
+
+    @rank_zero_only
+    def log_config_and_message(cfg: RootConfig, msg: str):
+        formatter = ModelFormatter()
+        print(formatter.format(cfg.model))
+        print(formatter.format(cfg.training))
+        print(msg)
 
     from training.acoustic_module import AcousticLightningModule
-    rank_zero_info(msg)
+    log_config_and_message(config, message)
     train_model(
         config=config, pl_module_cls=AcousticLightningModule,
         ckpt_save_dir=ckpt_save_dir, log_save_dir=log_save_dir,
