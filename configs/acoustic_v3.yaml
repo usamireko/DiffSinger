@@ -192,7 +192,7 @@ training:
     spec_vmax: 4.
     max_plots: 10
   finetuning:
-    pretraining_enabled: true
+    pretraining_enabled: false
     pretraining_from: null
     pretraining_include_params: ["model.*"]
     pretraining_exclude_params: []
