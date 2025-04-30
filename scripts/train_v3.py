@@ -30,8 +30,9 @@ def _load_and_log_config(config_path: pathlib.Path, scope: int, overrides: list[
     config.resolve(scope_mask=scope)
     config.check(scope_mask=scope)
     formatter = ModelFormatter()
-    print(formatter.format(config.model))
-    print(formatter.format(config.training))
+    from lightning_utilities.core.rank_zero import rank_zero_info
+    rank_zero_info(formatter.format(config.model))
+    rank_zero_info(formatter.format(config.training))
     return config
 
 
