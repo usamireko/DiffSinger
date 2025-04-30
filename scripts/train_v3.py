@@ -64,7 +64,7 @@ def train_model(
 ):
     import lightning.pytorch
     import lightning.pytorch.loggers
-    from lightning_utilities.core.rank_zero import rank_zero_only
+    from lightning_utilities.core.rank_zero import rank_zero_only, rank_zero_info
     from training.pl_module_base import BaseLightningModule
 
     from training.checkpoint import PeriodicModelCheckpoint, ExpressionModelCheckpoint
@@ -96,6 +96,10 @@ def train_model(
     pl_module = pl_module_cls(binary_data_dir, model_config, training_config)
     if resume_from is None and training_config.finetuning.pretraining_enabled:
         pl_module.load_from_pretrained_model(training_config.finetuning.pretraining_from)
+    if resume_from is None:
+        rank_zero_info(f"No checkpoint found or specified to resume from. Starting new training.")
+    else:
+        rank_zero_info(f"Resuming training from checkpoint: {resume_from}")
 
     if training_config.trainer.unit == "step":
         val_check_interval = (
@@ -234,7 +238,6 @@ def _train_acoustic_model_cli(
         log_save_dir = ckpt_save_dir
     else:
         log_save_dir = log_dir / exp_name
-    message = None
     if not restart and resume_from is None:
         latest_checkpoints = find_latest_checkpoints(ckpt_save_dir, candidate_tags=[
             ckpt_config.tag
@@ -249,21 +252,17 @@ def _train_acoustic_model_cli(
             )
         elif len(latest_checkpoints) == 1:
             resume_from = latest_checkpoints[0]
-            message = f"Found latest checkpoint: {resume_from}"
-        else:
-            message = "No checkpoints found. Starting new training."
 
     from lightning_utilities.core.rank_zero import rank_zero_only
 
     @rank_zero_only
-    def log_config_and_message(cfg: RootConfig, msg: str):
+    def log_config(cfg: RootConfig):
         formatter = ModelFormatter()
         print(formatter.format(cfg.model))
         print(formatter.format(cfg.training))
-        print(msg)
 
     from training.acoustic_module import AcousticLightningModule
-    log_config_and_message(config, message)
+    log_config(config)
     train_model(
         config=config, pl_module_cls=AcousticLightningModule,
         ckpt_save_dir=ckpt_save_dir, log_save_dir=log_save_dir,
