@@ -128,11 +128,17 @@ class BaseLightningModule(lightning.pytorch.LightningModule, abc.ABC):
             raise ValueError(f"Metric '{name}' already registered.")
         self.metrics[name] = metric
 
+    def build_train_dataset(self):
+        return BaseDataset(self.binary_data_dir, "train")
+
+    def build_valid_dataset(self):
+        return BaseDataset(self.binary_data_dir, "valid")
+
     def setup(self, stage: str) -> None:
         if stage != "fit":
             raise ValueError("This module only supports the 'fit' stage.")
-        self.train_dataset = BaseDataset(self.binary_data_dir, "train")
-        self.valid_dataset = BaseDataset(self.binary_data_dir, "valid")
+        self.train_dataset = self.build_train_dataset()
+        self.valid_dataset = self.build_valid_dataset()
 
     def train_dataloader(self):
         dataloader_config = self.training_config.dataloader
