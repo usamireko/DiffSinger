@@ -218,10 +218,10 @@ class BaseLightningModule(lightning.pytorch.LightningModule, abc.ABC):
                 outputs = self.forward_model(sample, infer=True)
                 save_obj["sample"] = sample
                 save_obj["outputs"] = outputs
-                filename = f"validation_{self.global_step}_{batch_index}.pt"
+                filename = f"validation_step{self.global_step}_rank{self.global_rank}_batch{batch_index}.pt"
                 torch.save(
                     obj=save_obj,
-                    f=pathlib.Path(self.logger.log_dir) / filename
+                    f=pathlib.Path(self.logger.log_dir) / filename,
                 )
             losses = {
                 "total_loss": sum(losses.values()),
@@ -241,7 +241,7 @@ class BaseLightningModule(lightning.pytorch.LightningModule, abc.ABC):
             return
         self.logger.log_metrics({f"validation/{k}": v for k, v in loss_vals.items()}, step=self.global_step)
         self.logger.log_metrics({f"metrics/{k}": v for k, v in metric_vals.items()}, step=self.global_step)
-        filelist = list(pathlib.Path(self.logger.log_dir).glob(f"validation_{self.global_step}_*.pt"))
+        filelist = list(pathlib.Path(self.logger.log_dir).glob(f"validation_step{self.global_step}_rank*_batch*.pt"))
         with torch.autocast(self.device.type, enabled=False):
             for file in tqdm.tqdm(filelist, desc="Plotting", leave=False):
                 obj = torch.load(file, map_location=self.device)
