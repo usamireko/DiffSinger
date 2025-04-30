@@ -55,7 +55,7 @@ class BaseBinarizer(abc.ABC):
 
     def __init__(
             self, data_config: DataConfig, binarizer_config: BinarizerConfig,
-            coverage_check_option: Literal["strict", "bypass", "compact"] = "strict"
+            coverage_check_option: Literal["strict", "bypass", "compat"] = "strict"
     ):
         self.phoneme_dictionary = data_config.phoneme_dictionary
         self.spk_map = data_config.spk_map
@@ -179,7 +179,7 @@ class BaseBinarizer(abc.ABC):
                         hit = True
                 if not hit:
                     # TODO: change to warning
-                    raise ValueError(
+                    raise RuntimeError(
                         f"Test prefix does not hit any item:\n"
                         f"prefix '{prefix}'"
                     )
@@ -249,8 +249,8 @@ class BaseBinarizer(abc.ABC):
         if self.coverage_check_option == "bypass":
             # bypass: ignore missing phonemes
             return
-        if self.coverage_check_option == "compact":
-            # compact: record missing phonemes and exclude them from the dictionary
+        if self.coverage_check_option == "compat":
+            # compat: record missing phonemes and exclude them from the dictionary
             self.missing_phonemes = missing_phonemes
             return
         # strict: raise error on missing phonemes
@@ -263,7 +263,7 @@ class BaseBinarizer(abc.ABC):
             raise RuntimeError(
                 f"The following phonemes are not covered in transcriptions: {missing_phones}\n"
                 "If you are fine-tuning from a pre-trained model or you don't want to support these phonemes, "
-                "consider using --coverage-check-option bypass or --coverage-check-option compact.\n"
+                "consider using --coverage-check-option bypass or --coverage-check-option compat.\n"
             )
 
     def free_lazy_modules(self):

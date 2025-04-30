@@ -60,7 +60,7 @@ def main():
 )
 @click.option(
     "--coverage-check-option",
-    type=click.Choice(["strict", "bypass", "compact"], case_sensitive=False),
+    type=click.Choice(["strict", "bypass", "compat"], case_sensitive=False),
     default="strict", required=False
 )
 def _binarize_acoustic_datasets_cli(config: pathlib.Path, override: list[str], coverage_check_option: str):
@@ -87,7 +87,7 @@ def _binarize_acoustic_datasets_cli(config: pathlib.Path, override: list[str], c
 )
 @click.option(
     "--coverage-check-option",
-    type=click.Choice(["strict", "bypass", "compact"], case_sensitive=False),
+    type=click.Choice(["strict", "bypass", "compat"], case_sensitive=False),
     default="strict", required=False
 )
 def _binarize_variance_datasets_cli(config: pathlib.Path, override: list[str], coverage_check_option: str):
@@ -114,7 +114,7 @@ def _binarize_variance_datasets_cli(config: pathlib.Path, override: list[str], c
 )
 @click.option(
     "--coverage-check-option",
-    type=click.Choice(["strict", "bypass", "compact"], case_sensitive=False),
+    type=click.Choice(["strict", "bypass", "compat"], case_sensitive=False),
     default="strict", required=False
 )
 def _binarize_duration_datasets_cli(config: pathlib.Path, override: list[str], coverage_check_option: str):
