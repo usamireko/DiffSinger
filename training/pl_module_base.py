@@ -237,7 +237,7 @@ class BaseLightningModule(lightning.pytorch.LightningModule, abc.ABC):
         metric_vals = {k: v.compute() for k, v in self.metrics.items()}
         self.log_dict(
             {**loss_vals, **metric_vals},
-            on_epoch=True, prog_bar=False, logger=False, sync_dist=False
+            on_epoch=True, prog_bar=False, logger=False, sync_dist=True
         )
         if self.global_rank != 0:
             return
