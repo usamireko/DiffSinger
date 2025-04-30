@@ -41,6 +41,7 @@ class BaseLightningModule(lightning.pytorch.LightningModule, abc.ABC):
         self.valid_dataset: BaseDataset = None
         self.train_sampler: DynamicBatchSampler = None
         self.valid_sampler: DynamicBatchSampler = None
+        self.logger_step = -1  # when accumulate_grad_batches > 1, this helps to avoid redundant logging
 
     @abc.abstractmethod
     def build_model(self):
@@ -198,10 +199,14 @@ class BaseLightningModule(lightning.pytorch.LightningModule, abc.ABC):
         self.log_dict(log_outputs, prog_bar=True, logger=False, on_step=True, on_epoch=False)
         self.log("lr", self.lr_schedulers().get_last_lr()[0], prog_bar=True, logger=False, on_step=True, on_epoch=False)
         # logs to tensorboard
-        if self.global_step % self.training_config.trainer.log_every_n_steps == 0:
+        if (
+                self.global_step > self.logger_step and
+                self.global_step % self.training_config.trainer.log_every_n_steps == 0
+        ):
             tb_log = {f"training/{k}": v for k, v in log_outputs.items()}
             tb_log["training/lr"] = self.lr_schedulers().get_last_lr()[0]
             self.logger.log_metrics(tb_log, step=self.global_step)
+            self.logger_step = self.global_step
         return total_loss
 
     def on_validation_epoch_start(self):
