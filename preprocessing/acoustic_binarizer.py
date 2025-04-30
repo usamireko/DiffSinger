@@ -93,19 +93,14 @@ class AcousticBinarizer(BaseBinarizer):
             "key_shift": numpy.array(0., dtype=numpy.float32),
             "speed": numpy.array(1., dtype=numpy.float32),
         }
-        variance_names = []
         if self.config.features.energy.used:
             data["energy"] = energy
-            variance_names.append("energy")
         if self.config.features.breathiness.used:
             data["breathiness"] = breathiness
-            variance_names.append("breathiness")
         if self.config.features.voicing.used:
             data["voicing"] = voicing
-            variance_names.append("voicing")
         if self.config.features.tension.used:
             data["tension"] = tension
-            variance_names.append("tension")
         length, uv, data = dask.compute(length, uv, data)
 
         if uv.all():
@@ -125,25 +120,23 @@ class AcousticBinarizer(BaseBinarizer):
         if not augmentation:
             return samples
 
-        augmentation_params: list[tuple[int, float, float]] = []  # (ori_idx, shift, speed)
+        augmentation_params: list[tuple[float, float]] = []  # (shift, speed)
         shift_scale = self.config.augmentation.random_pitch_shifting.scale
         if self.config.augmentation.random_pitch_shifting.enabled:
-            shift_ids = [0] * int(shift_scale)
-            if numpy.random.rand() < shift_scale % 1:
-                shift_ids.append(0)
+            num_shifts = int(shift_scale) + (numpy.random.rand() < shift_scale % 1)
         else:
-            shift_ids = []
+            num_shifts = 0
         key_shift_min, key_shift_max = self.config.augmentation.random_pitch_shifting.range
-        for i in shift_ids:
+        for _ in range(num_shifts):
             rand = random.uniform(-1, 1)
             if rand < 0:
                 shift = key_shift_min * abs(rand)
             else:
                 shift = key_shift_max * rand
-            augmentation_params.append((i, shift, 1))
+            augmentation_params.append((shift, 1))
         stretch_scale = self.config.augmentation.random_time_stretching.scale
         if self.config.augmentation.random_time_stretching.enabled:
-            randoms = numpy.random.rand(1 + len(shift_ids))
+            randoms = numpy.random.rand(1 + num_shifts)
             stretch_ids = list(numpy.where(randoms < stretch_scale % 1)[0])
             if stretch_scale > 1:
                 stretch_ids.extend([0] * int(stretch_scale))
@@ -155,42 +148,42 @@ class AcousticBinarizer(BaseBinarizer):
             # Uniform distribution in log domain
             speed = speed_min * (speed_max / speed_min) ** random.random()
             if i == 0:
-                augmentation_params.append((i, 0, speed))
+                augmentation_params.append((0, speed))
             else:
-                ori_idx, shift, _ = augmentation_params[i - 1]
-                augmentation_params[i - 1] = (ori_idx, shift, speed)
+                shift, _ = augmentation_params[i - 1]
+                augmentation_params[i - 1] = (shift, speed)
 
         if not augmentation_params:
             return samples
 
         length_transforms = []
         data_transforms = []
-        for ori_idx, shift, speed in augmentation_params:
+        for shift, speed in augmentation_params:
             mel_transform, length_transform = self.get_mel(waveform, shift=shift, speed=speed)
             ph_dur_transform = self.sec_dur_to_frame_dur(ph_dur_sec / speed, length_transform)
             f0_transform = self.resize_curve(data["f0"] * 2 ** (shift / 12), length_transform)
             v_transform = {
                 v_name: self.resize_curve(data[v_name], length_transform)
-                for v_name in variance_names
+                for v_name in self.config.features.enabled_variance_names
             }
-            data_transform = samples[ori_idx].data.copy()
+            data_transform = sample.data.copy()
             data_transform["ph_dur"] = ph_dur_transform
             data_transform["mel"] = mel_transform
             data_transform["f0"] = f0_transform
             data_transform["key_shift"] = numpy.array(shift, dtype=numpy.float32)
             data_transform["speed"] = (
                 dask.delayed(
-                    lambda x: numpy.array(samples[ori_idx].length / x, dtype=numpy.float32)  # real speed
+                    lambda x: numpy.array(sample.length / x, dtype=numpy.float32)  # real speed
                 )(length_transform)
             )
-            for v_name in variance_names:
+            for v_name in self.config.features.enabled_variance_names:
                 data_transform[v_name] = v_transform[v_name]
             length_transforms.append(length_transform)
             data_transforms.append(data_transform)
 
         length_transforms, data_transforms = dask.compute(length_transforms, data_transforms)
-        for i, (ori_idx, shift, speed) in enumerate(augmentation_params):
-            sample_transform = copy.copy(samples[ori_idx])
+        for i in range(len(augmentation_params)):
+            sample_transform = copy.copy(sample)
             sample_transform.length = length_transforms[i]
             sample_transform.data = data_transforms[i]
             sample_transform.augmented = True

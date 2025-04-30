@@ -195,6 +195,19 @@ class BinarizerFeaturesConfig(ConfigBaseModel):
     voicing: CurveParameterConfig = Field(...)
     tension: CurveParameterConfig = Field(...)
 
+    @property
+    def enabled_variance_names(self):
+        enabled_variance_names = []
+        if self.energy.used:
+            enabled_variance_names.append("energy")
+        if self.breathiness.used:
+            enabled_variance_names.append("breathiness")
+        if self.voicing.used:
+            enabled_variance_names.append("voicing")
+        if self.tension.used:
+            enabled_variance_names.append("tension")
+        return enabled_variance_names
+
 
 class BinarizerMIDIConfig(ConfigBaseModel):
     used: bool = Field(...)
