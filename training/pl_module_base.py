@@ -77,7 +77,9 @@ class BaseLightningModule(lightning.pytorch.LightningModule, abc.ABC):
         rank_zero_info(f"Freezing {frozen_count} parameter(s).")
 
     def load_from_pretrained_model(self, pretrained_model_path: pathlib.Path):
-        source_state_dict = torch.load(pretrained_model_path, map_location=self.device)["state_dict"]
+        source_state_dict = torch.load(
+            pretrained_model_path, map_location=self.device, weights_only=True
+        )["state_dict"]
         includes = self.training_config.finetuning.pretraining_include_params
         excludes = self.training_config.finetuning.pretraining_exclude_params
         if includes:
@@ -244,7 +246,7 @@ class BaseLightningModule(lightning.pytorch.LightningModule, abc.ABC):
         filelist = list(pathlib.Path(self.logger.log_dir).glob(f"validation_step{self.global_step}_rank*_batch*.pt"))
         with torch.autocast(self.device.type, enabled=False):
             for file in tqdm.tqdm(filelist, desc="Plotting", leave=False):
-                obj = torch.load(file, map_location=self.device)
+                obj = torch.load(file, map_location=self.device, weights_only=True)
                 sample = obj["sample"]
                 outputs = obj["outputs"]
                 self.plot_validation_results(sample, outputs)
