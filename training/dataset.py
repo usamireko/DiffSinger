@@ -19,7 +19,7 @@ class BaseDataset(torch.utils.data.Dataset):
             for k, v in numpy.load(binary_data_dir / f"{prefix}.info.npz").items()
         }
         self.data = IndexedDataset(binary_data_dir, prefix)
-        self.epoch = 0
+        self.epoch = torch.multiprocessing.Value("i", 0)
 
     def __getitem__(self, index):
         return {"_idx": index, **self.data[index]}
@@ -28,7 +28,7 @@ class BaseDataset(torch.utils.data.Dataset):
         return self.info["lengths"].shape[0]
 
     def set_epoch(self, epoch: int):
-        self.epoch = epoch
+        self.epoch.value = epoch
 
     def num_frames(self, index: int) -> int:
         return self.info["lengths"][index]
@@ -100,7 +100,6 @@ class DynamicBatchSampler(torch.utils.data.distributed.DistributedSampler):
     def set_epoch(self, epoch: int):
         super().set_epoch(epoch)
         self.generator = torch.Generator().manual_seed(self.seed + epoch)
-        self.dataset.set_epoch(epoch)
 
     def permutation(self, n: int) -> list[int]:
         perm = torch.randperm(n, generator=self.generator).tolist()
@@ -110,6 +109,7 @@ class DynamicBatchSampler(torch.utils.data.distributed.DistributedSampler):
         if self.formed == self.epoch + self.seed:
             return
 
+        self.dataset.set_epoch(self.epoch)
         lengths = [self.dataset.num_frames(i) for i in range(len(self.dataset))]
         if self.sort_by_len:
             sorted_indices = sorted(
@@ -119,23 +119,27 @@ class DynamicBatchSampler(torch.utils.data.distributed.DistributedSampler):
         else:
             sorted_indices = list(range(len(lengths)))
 
-        batches: list[list[int]] = []
-        current_batch = []
-        current_frames = 0
+        def batch_full(batch_: list[int], new_index_: int):
+            if len(batch_) >= self.max_batch_size:
+                return True
+            max_len = max(lengths[new_index_], max((lengths[i] for i in batch_), default=0))
+            if max_len * (len(batch_) + 1) > self.max_batch_frames:
+                return True
+            return False
 
+        batches: list[list[int]] = []
+
+        current_batch = []
         for idx in sorted_indices:
             sample_length = lengths[idx]
             if sample_length > self.max_batch_frames:
                 raise ValueError(
                     f"Sample length {sample_length} exceeds max batch frames {self.max_batch_frames}."
                 )
-            if (len(current_batch) >= self.max_batch_size or
-                    current_frames + sample_length > self.max_batch_frames):
+            if batch_full(current_batch, idx):
                 batches.append(current_batch)
                 current_batch = []
-                current_frames = 0
             current_batch.append(idx)
-            current_frames += sample_length
         if current_batch:
             batches.append(current_batch)
 
@@ -143,7 +147,6 @@ class DynamicBatchSampler(torch.utils.data.distributed.DistributedSampler):
         remainder = (multiple_of - (len(batches) % multiple_of)) % multiple_of
         if self.reassign_batches:
             new_batch = []
-            new_batch_frames = 0
             while remainder > 0:
                 num_batches = len(batches)
                 perm = self.permutation(num_batches)
@@ -154,24 +157,20 @@ class DynamicBatchSampler(torch.utils.data.distributed.DistributedSampler):
                     batch = batches[idx]
                     if len(batch) > 1:
                         item = batch[-1]
-                        if (len(new_batch) == self.max_batch_size or
-                                new_batch_frames + lengths[item] > self.max_batch_frames):
+                        if batch_full(new_batch, item):
                             batches.append(new_batch)
                             new_batch = []
-                            new_batch_frames = 0
                             modified = True
                             remainder -= 1
                             if remainder == 0:
                                 break
                         batch.pop()
                         new_batch.append(item)
-                        new_batch_frames += lengths[item]
                     idx += 1
                 if not modified:
                     if len(new_batch) > 0:
                         batches.append(new_batch)
                         new_batch = []
-                        new_batch_frames = 0
                         remainder -= 1
                     if remainder > 0:
                         raise RuntimeError(
@@ -186,7 +185,7 @@ class DynamicBatchSampler(torch.utils.data.distributed.DistributedSampler):
         elif self.sort_by_len:
             batches = sorted(
                 batches,
-                key=lambda b: sum(self.dataset.num_frames(i) for i in b),
+                key=lambda b: len(b) * max(lengths[i] for i in b),
                 reverse=True
             )
 
