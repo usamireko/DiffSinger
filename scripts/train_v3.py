@@ -4,6 +4,8 @@ import re
 import shutil
 import sys
 
+from lightning.fabric.utilities import rank_zero_only
+
 root_dir = pathlib.Path(__file__).parent.parent.resolve()
 os.environ["PYTHONPATH"] = str(root_dir)
 sys.path.insert(0, str(root_dir))
@@ -24,15 +26,11 @@ __all__ = [
 ]
 
 
-def _load_and_log_config(config_path: pathlib.Path, scope: int, overrides: list[str] = None) -> RootConfig:
+def _load_config(config_path: pathlib.Path, scope: int, overrides: list[str] = None) -> RootConfig:
     config = load_raw_config(config_path, overrides)
     config = RootConfig.model_validate(config, scope=scope)
     config.resolve(scope_mask=scope)
     config.check(scope_mask=scope)
-    formatter = ModelFormatter()
-    from lightning_utilities.core.rank_zero import rank_zero_info
-    rank_zero_info(formatter.format(config.model))
-    rank_zero_info(formatter.format(config.training))
     return config
 
 
@@ -232,7 +230,7 @@ def _train_acoustic_model_cli(
         restart: bool,
         resume_from: pathlib.Path,
 ):
-    config = _load_and_log_config(config, scope=ConfigurationScope.ACOUSTIC, overrides=override)
+    config = _load_config(config, scope=ConfigurationScope.ACOUSTIC, overrides=override)
     ckpt_save_dir = work_dir / exp_name
     if log_dir is None:
         log_save_dir = ckpt_save_dir
@@ -255,7 +253,18 @@ def _train_acoustic_model_cli(
             print(f"Found latest checkpoint: {resume_from}")
         else:
             print("No checkpoints found. Starting new training.")
+
+    from lightning_utilities.core.rank_zero import rank_zero_only
+
+    @rank_zero_only
+    def log_config(cfg: RootConfig):
+        formatter = ModelFormatter()
+        from lightning_utilities.core.rank_zero import rank_zero_info
+        rank_zero_info(formatter.format(cfg.model))
+        rank_zero_info(formatter.format(cfg.training))
+
     from training.acoustic_module import AcousticLightningModule
+    log_config(config)
     train_model(
         config=config, pl_module_cls=AcousticLightningModule,
         ckpt_save_dir=ckpt_save_dir, log_save_dir=log_save_dir,
