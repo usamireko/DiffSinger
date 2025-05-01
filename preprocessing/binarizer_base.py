@@ -552,20 +552,10 @@ class BaseBinarizer(abc.ABC):
         curve_text = label.get(curve_key)
         if curve_text is None:
             return None
-        curve = self.resample_align_curve(
+        curve = dask.delayed(resample_align_curve)(
             numpy.array(curve_text.split(), numpy.float32),
             original_timestep=float(label[timestep_key]),
             target_timestep=self.timestep,
             align_length=length
         )
         return curve
-
-    @dask.delayed
-    def resample_align_curve(
-            self, curve: numpy.ndarray,
-            original_timestep: float, target_timestep: float, align_length: int
-    ):
-        resample_aligned_curve = resample_align_curve(
-            curve, original_timestep, target_timestep, align_length
-        )
-        return resample_aligned_curve
