@@ -45,7 +45,7 @@ class BaseLightningModule(lightning.pytorch.LightningModule, abc.ABC):
         self.train_sampler: DynamicBatchSampler = None
         self.valid_sampler: DynamicBatchSampler = None
         
-        self.enabled_ema = training_config.use_ema if self.global_rank == 0 else False
+        self.enabled_ema = training_config.use_ema
 
 
     @abc.abstractmethod
