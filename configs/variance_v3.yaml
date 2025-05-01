@@ -46,19 +46,19 @@ binarizer:
     fft_size: 2048
     win_size: 2048
     energy:
-      used: true
+      enabled: true
       smooth_width: 0.12
     breathiness:
-      used: true
+      enabled: true
       smooth_width: 0.12
     voicing:
-      used: true
+      enabled: true
       smooth_width: 0.12
     tension:
-      used: true
+      enabled: true
       smooth_width: 0.12
   midi:
-    used: true
+    enabled: true
     smooth_width: 0.06
     with_glide: false
 

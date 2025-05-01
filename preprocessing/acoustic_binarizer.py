@@ -94,13 +94,13 @@ class AcousticBinarizer(BaseBinarizer):
             "key_shift": numpy.array(0., dtype=numpy.float32),
             "speed": numpy.array(1., dtype=numpy.float32),
         }
-        if self.config.features.energy.used:
+        if self.config.features.energy.enabled:
             data["energy"] = energy
-        if self.config.features.breathiness.used:
+        if self.config.features.breathiness.enabled:
             data["breathiness"] = breathiness
-        if self.config.features.voicing.used:
+        if self.config.features.voicing.enabled:
             data["voicing"] = voicing
-        if self.config.features.tension.used:
+        if self.config.features.tension.enabled:
             data["tension"] = tension
         length, uv, data = dask.compute(length, uv, data)
 

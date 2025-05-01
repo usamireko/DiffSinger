@@ -177,7 +177,7 @@ class SpectrogramConfig(ConfigBaseModel):
 
 
 class CurveParameterConfig(ConfigBaseModel):
-    used: bool = Field(...)
+    enabled: bool = Field(...)
     smooth_width: float = Field(0.12, gt=0)
 
 
@@ -198,19 +198,19 @@ class BinarizerFeaturesConfig(ConfigBaseModel):
     @property
     def enabled_variance_names(self):
         enabled_variance_names = []
-        if self.energy.used:
+        if self.energy.enabled:
             enabled_variance_names.append("energy")
-        if self.breathiness.used:
+        if self.breathiness.enabled:
             enabled_variance_names.append("breathiness")
-        if self.voicing.used:
+        if self.voicing.enabled:
             enabled_variance_names.append("voicing")
-        if self.tension.used:
+        if self.tension.enabled:
             enabled_variance_names.append("tension")
         return enabled_variance_names
 
 
 class BinarizerMIDIConfig(ConfigBaseModel):
-    used: bool = Field(...)
+    enabled: bool = Field(...)
     with_glide: bool = Field(False)
     smooth_width: float = Field(0.06, gt=0)
 

@@ -49,16 +49,16 @@ binarizer:
       fmin: 40
       fmax: 16000
     energy:
-      used: true
+      enabled: true
       smooth_width: 0.12
     breathiness:
-      used: true
+      enabled: true
       smooth_width: 0.12
     voicing:
-      used: true
+      enabled: true
       smooth_width: 0.12
     tension:
-      used: true
+      enabled: true
       smooth_width: 0.12
   augmentation:
     random_pitch_shifting:
