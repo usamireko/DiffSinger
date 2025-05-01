@@ -24,7 +24,7 @@ class DiffSingerAcoustic(nn.Module):
         self.local_upsample = LocalUpsample()  # tokens to frames
         self.use_spk_embed = config.use_spk_id
         if self.use_spk_embed:
-            self.spk_embed = Embedding(config.num_spk, config.condition_dim)
+            self.speaker_embedding = Embedding(config.num_spk, config.condition_dim)
         self.parameter_embeddings = ParameterEmbeddings(config=config.embeddings)
         self.spec_decoder = DiffusionDecoder(
             sample_dim=config.sample_dim,
@@ -46,7 +46,7 @@ class DiffSingerAcoustic(nn.Module):
         cond, mask = self.local_upsample(encoder_out, ups=durations)
         if self.use_spk_embed:
             if spk_embed is None:
-                spk_embed = self.spk_embed(spk_ids)[:, None, :]
+                spk_embed = self.speaker_embedding(spk_ids)[:, None, :]
             cond = cond + spk_embed
         cond = self.parameter_embeddings(cond, f0=f0, **kwargs)
         decoder_out = self.spec_decoder(condition=cond, sample_gt=spec_gt, infer=infer)
