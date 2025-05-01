@@ -173,6 +173,8 @@ class BaseLightningModule(lightning.pytorch.LightningModule, abc.ABC):
         """
         if name in self.losses:
             raise ValueError(f"Loss '{name}' already registered.")
+        if name in self.metrics:
+            raise ValueError(f"Loss name '{name}' is already used by a metric.")
         self.losses[name] = loss
         self.val_losses[name] = MeanMetric()  # for validation logging
 
@@ -182,6 +184,8 @@ class BaseLightningModule(lightning.pytorch.LightningModule, abc.ABC):
         """
         if name in self.metrics:
             raise ValueError(f"Metric '{name}' already registered.")
+        if name in self.losses:
+            raise ValueError(f"Metric name {name} is already used by a loss.")
         self.metrics[name] = metric
 
     def build_train_dataset(self) -> BaseDataset:
@@ -297,6 +301,7 @@ class BaseLightningModule(lightning.pytorch.LightningModule, abc.ABC):
         ):
             tb_log = {f"training/{k}": v for k, v in log_outputs.items()}
             tb_log["training/lr"] = self.lr_schedulers().get_last_lr()[0]
+            tb_log["training/epoch"] = self.current_epoch
             self.logger.log_metrics(tb_log, step=self.global_step)
             self.logger_step = self.global_step
         return total_loss
@@ -346,7 +351,7 @@ class BaseLightningModule(lightning.pytorch.LightningModule, abc.ABC):
         if self.global_rank != 0:
             return
         self.logger.log_metrics({f"validation/{k}": v for k, v in loss_vals.items()}, step=self.global_step)
-        self.logger.log_metrics({f"metrics/{k}": v for k, v in metric_vals.items()}, step=self.global_step)
+        self.logger.log_metrics({f"validation/{k}": v for k, v in metric_vals.items()}, step=self.global_step)
         filelist = list(pathlib.Path(self.logger.log_dir).glob(f"validation_step{self.global_step}_rank*_batch*.pt"))
         with torch.autocast(self.device.type, enabled=False):
             for file in tqdm.tqdm(filelist, desc="Plotting", leave=False):
