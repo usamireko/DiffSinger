@@ -38,6 +38,11 @@ class ExponentialMovingAverageV2:
 
     def load_state_dict(self, state_dict):
         self.shadow = state_dict
+        s_key=set(self.shadow.keys())
+        l_key=set(self.key_list)
+        symmetric_diff = s_key ^ l_key
+        if s_key!=l_key:
+            raise RuntimeError(f"load_state_dict error diff key: {symmetric_diff}")
 
     def save_state_dict(self):
         return self.shadow
