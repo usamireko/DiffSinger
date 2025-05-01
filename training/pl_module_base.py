@@ -7,9 +7,11 @@ import torch
 import tqdm
 from lightning_utilities.core.rank_zero import rank_zero_info
 from torch import nn
+from torch.optim import Optimizer
 from torchmetrics import Metric, MeanMetric
 
 from lib.config.schema import ModelConfig, TrainingConfig
+from lib.exponential_moving_average import ExponentialMovingAverageV2
 from lib.reflection import build_optimizer_from_config, build_lr_scheduler_from_config
 from .dataset import BaseDataset, DynamicBatchSampler
 
@@ -22,6 +24,7 @@ class BaseLightningModule(lightning.pytorch.LightningModule, abc.ABC):
             training_config: TrainingConfig
     ):
         super().__init__()
+        self.exponential_moving_average = None
         self.binary_data_dir = binary_data_dir
         self.model_config = model_config
         self.training_config = training_config
@@ -41,9 +44,17 @@ class BaseLightningModule(lightning.pytorch.LightningModule, abc.ABC):
         self.valid_dataset: BaseDataset = None
         self.train_sampler: DynamicBatchSampler = None
         self.valid_sampler: DynamicBatchSampler = None
+        
+        self.enabled_ema = training_config.use_ema
+
 
     @abc.abstractmethod
     def build_model(self):
+        
+        self.exponential_moving_average = ExponentialMovingAverageV2(model=self.model, decay=self.training_config.ema_decay,
+                         ignored_layers=self.training_config.ema_ignored_layers) if self.enabled_ema else None
+        if self.enabled_ema:
+            self.EMA.register()
         pass
 
     @abc.abstractmethod
@@ -205,6 +216,8 @@ class BaseLightningModule(lightning.pytorch.LightningModule, abc.ABC):
         return total_loss
 
     def on_validation_epoch_start(self):
+        if self.enabled_ema:
+            self.exponential_moving_average.apply_shadow()
         for metric in self.val_losses.values():
             # self.val_losses is a built-in dict, so we need to move them to device manually
             metric.to(self.device)
@@ -233,6 +246,8 @@ class BaseLightningModule(lightning.pytorch.LightningModule, abc.ABC):
                 self.val_losses[k].update(v, weight=sample["size"])
 
     def on_validation_epoch_end(self):
+        if self.enabled_ema:
+            self.exponential_moving_average.restore()
         loss_vals = {k: v.compute() for k, v in self.val_losses.items()}
         metric_vals = {k: v.compute() for k, v in self.metrics.items()}
         self.log_dict(
@@ -284,3 +299,15 @@ class BaseLightningModule(lightning.pytorch.LightningModule, abc.ABC):
                 "strict": False,  # in case the candidates are empty after resuming
             }
         }
+
+    def on_before_zero_grad(self, optimizer: Optimizer) -> None:
+        if self.enabled_ema:
+            self.exponential_moving_average.update()
+
+    def on_save_checkpoint(self, checkpoint):
+        if self.enabled_ema:
+            checkpoint['ema_weights'] = self.exponential_moving_average.save_state_dict()
+
+    def on_load_checkpoint(self, checkpoint):
+        if self.enabled_ema:
+            self.exponential_moving_average.load_state_dict(checkpoint.pop('EMA_weight'))

@@ -18,6 +18,8 @@ class AcousticLightningModule(BaseLightningModule):
             self.vocoder = Vocoder(self.training_config.validation.vocoder)
         else:
             self.vocoder = None
+            
+        super().build_model()
 
     def setup(self, stage: str) -> None:
         super().setup(stage)

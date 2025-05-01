@@ -1,7 +1,7 @@
 import json
 import math
 import pathlib
-from typing import Annotated, Any, Literal, Union
+from typing import Annotated, Any, Literal, Union, Optional, List
 
 from pydantic import Field, field_validator
 
@@ -727,6 +727,10 @@ class TrainingConfig(ConfigBaseModel):
     trainer: TrainerConfig = Field(...)
     validation: ValidationConfig = Field(...)
     finetuning: FinetuningConfig = Field(...)
+
+    use_ema: bool = Field(False)
+    ema_decay: float = Field(0.999, gt=0, lt=1)
+    ema_ignored_layers: Optional[List[str]] = Field(None)
 
 
 class InferenceConfig(ConfigBaseModel):
