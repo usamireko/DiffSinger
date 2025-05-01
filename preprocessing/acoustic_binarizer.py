@@ -34,6 +34,7 @@ class AcousticMetadataItem(MetadataItem):
 
 class AcousticBinarizer(BaseBinarizer):
     __data_attrs__ = ACOUSTIC_ITEM_ATTRIBUTES
+    __augmentation__ = True
 
     def load_metadata(self, data_source_config: DataSourceConfig):
         metadata_dict = collections.OrderedDict()

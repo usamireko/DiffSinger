@@ -52,6 +52,7 @@ class DataSample:
 
 class BaseBinarizer(abc.ABC):
     __data_attrs__: list[str] = None
+    __augmentation__: bool = False
 
     def __init__(
             self, data_config: DataConfig, binarizer_config: BinarizerConfig,
@@ -300,6 +301,10 @@ class BaseBinarizer(abc.ABC):
         total_duration = {k: 0 for k in self.spk_map}
         for samples in tqdm.tqdm(iterable, total=len(items), desc=f"Processing {prefix} items"):
             for sample in samples:
+                if not augmentation and sample.augmented:
+                    raise RuntimeError(
+                        f"Augmented samples are not allowed when `augmentation` is set to False."
+                    )
                 builder.add_item(sample.data)
                 names.append(sample.name)
                 ph_texts.append(sample.ph_text)
@@ -374,7 +379,7 @@ class BaseBinarizer(abc.ABC):
         self.phoneme_dictionary.dump(self.binary_data_dir / "ph_map.json", excludes=self.missing_phonemes)
         self.train_items.sort(key=lambda i: i.estimated_duration, reverse=True)
         self.process_items(self.valid_items, prefix="valid", augmentation=False, multiprocessing=False)
-        self.process_items(self.train_items, prefix="train", augmentation=True, multiprocessing=True)
+        self.process_items(self.train_items, prefix="train", augmentation=self.__augmentation__, multiprocessing=True)
 
     @dask.delayed
     def load_waveform(self, wav_fn: pathlib.Path):
