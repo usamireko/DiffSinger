@@ -90,9 +90,18 @@ class BaseLightningModule(lightning.pytorch.LightningModule, abc.ABC):
         rank_zero_info(f"Freezing {frozen_count} parameter(s).")
 
     def load_from_pretrained_model(self, pretrained_model_path: pathlib.Path):
-        source_state_dict = torch.load(
+        source_model = torch.load(
             pretrained_model_path, map_location=self.device, weights_only=True
-        )["state_dict"]
+        )
+        source_state_dict=source_model["state_dict"]
+        if self.enabled_ema:
+            if source_model.get("ema_weights", None) is not None:
+                load_fn=0
+                ema_source_state_dict=source_model["ema_weights"]
+            else:
+                load_fn=1
+
+
         includes = self.training_config.finetuning.pretraining_include_params
         excludes = self.training_config.finetuning.pretraining_exclude_params
         if includes:
@@ -102,6 +111,9 @@ class BaseLightningModule(lightning.pytorch.LightningModule, abc.ABC):
                     name for name in source_state_dict.keys() if fnmatch(name, pattern)
                 )
             source_state_dict = {k: v for k, v in source_state_dict.items() if k in include_names}
+            if self.enabled_ema :
+                if load_fn==0:
+                    ema_source_state_dict = {k: v for k, v in ema_source_state_dict.items() if k in include_names}
         if excludes:
             exclude_names = set()
             for pattern in excludes:
@@ -109,6 +121,9 @@ class BaseLightningModule(lightning.pytorch.LightningModule, abc.ABC):
                     name for name in source_state_dict.keys() if fnmatch(name, pattern)
                 )
             source_state_dict = {k: v for k, v in source_state_dict.items() if k not in exclude_names}
+            if self.enabled_ema :
+                if load_fn==0:
+                    ema_source_state_dict = {k: v for k, v in ema_source_state_dict.items() if k not in exclude_names}
         target_state_dict = self.state_dict()
         errors = []
         for name in list(source_state_dict.keys()):
@@ -128,6 +143,15 @@ class BaseLightningModule(lightning.pytorch.LightningModule, abc.ABC):
                 )
             )
         self.load_state_dict(source_state_dict, strict=False)
+        if self.enabled_ema:
+            if load_fn==1:
+                self.exponential_moving_average.re_register()
+            else:
+                ema_s=self.exponential_moving_average.save_state_dict()
+                ema_s_key=set(ema_s.keys())
+                ema_source_state_dict = {k: v for k, v in ema_source_state_dict.items() if k in ema_s_key}
+                ema_s.update(ema_source_state_dict)
+                self.exponential_moving_average.load_state_dict(ema_s)
         rank_zero_info(
             f"Loaded {len(source_state_dict)} parameter(s) from '{pretrained_model_path}'"
         )
@@ -320,4 +344,4 @@ class BaseLightningModule(lightning.pytorch.LightningModule, abc.ABC):
 
     def on_load_checkpoint(self, checkpoint):
         if self.enabled_ema:
-            self.exponential_moving_average.load_state_dict(checkpoint.pop('EMA_weight'))
+            self.exponential_moving_average.load_state_dict(checkpoint.pop('ema_weights'))

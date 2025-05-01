@@ -31,6 +31,11 @@ class ExponentialMovingAverageV2:
                 self.shadow[name] = param.data.clone()
                 self.key_list.append(name)
 
+    def re_register(self):
+        self.key_list = []
+        self.shadow = {}
+        self.register()
+
     def load_state_dict(self, state_dict):
         self.shadow = state_dict
 
