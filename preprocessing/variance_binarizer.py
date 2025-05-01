@@ -252,7 +252,7 @@ class VarianceBinarizer(BaseBinarizer):
             label, "voicing", "voicing_timestep", length
         )
         if voicing is None:
-            voicing = self.get_energy(noise, length, smooth_fn_name="voicing")
+            voicing = self.get_energy(harmonic, length, smooth_fn_name="voicing")
         tension = self.try_load_curve_from_label_if_allowed(
             label, "tension", "tension_timestep", length
         )
