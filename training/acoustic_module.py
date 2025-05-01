@@ -11,11 +11,11 @@ from .pl_module_base import BaseLightningModule
 
 
 class AcousticLightningModule(BaseLightningModule):
-    def build_model(self):
+    def build_model(self) -> DiffSingerAcoustic:
         return DiffSingerAcoustic(self.model_config)
 
     # noinspection PyAttributeOutsideInit
-    def post_init(self):
+    def post_init(self) -> None:
         if self.training_config.validation.use_vocoder:
             self.vocoder = Vocoder(self.training_config.validation.vocoder)
         else:
@@ -27,7 +27,7 @@ class AcousticLightningModule(BaseLightningModule):
         if self.vocoder is not None:
             self.vocoder.to(self.device)
 
-    def build_losses_and_metrics(self):
+    def register_losses_and_metrics(self) -> None:
         if self.model_config.spec_decoder.use_shallow_diffusion:
             aux_loss_type = self.training_config.loss.spec_decoder.aux_loss_type
             if aux_loss_type == "L1":
@@ -35,11 +35,11 @@ class AcousticLightningModule(BaseLightningModule):
             elif aux_loss_type == "L2":
                 aux_spec_loss = nn.MSELoss()
             else:
-                raise ValueError("Invalid spec_decoder.aux_loss_type")
+                raise ValueError(f"Invalid spec_decoder.aux_loss_type: {aux_loss_type}")
             self.register_loss("aux_spec_loss", aux_spec_loss)
         main_loss_type = self.training_config.loss.spec_decoder.main_loss_type
         if main_loss_type not in ["L1", "L2"]:
-            raise ValueError("Invalid spec_decoder.main_loss_type")
+            raise ValueError(f"Invalid spec_decoder.main_loss_type: {main_loss_type}")
         diff_spec_loss = RectifiedFlowLoss(
             loss_type=main_loss_type,
             log_norm=self.training_config.loss.spec_decoder.main_loss_log_norm
@@ -77,7 +77,7 @@ class AcousticLightningModule(BaseLightningModule):
             losses["diff_spec_loss"] = diff_spec_loss
             return losses
 
-    def plot_validation_results(self, sample: dict[str, torch.Tensor], outputs: dict[str, torch.Tensor]):
+    def plot_validation_results(self, sample: dict[str, torch.Tensor], outputs: dict[str, torch.Tensor]) -> None:
         for i in range(len(sample["indices"])):
             data_idx = sample['indices'][i].item()
             spec_len = self.valid_dataset.info["mel"][data_idx]

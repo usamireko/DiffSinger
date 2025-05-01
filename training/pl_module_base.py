@@ -39,7 +39,7 @@ class BaseLightningModule(lightning.pytorch.LightningModule, abc.ABC):
         self.val_losses: dict[str, Metric] = {  # use built-in dict to not be printed in the model summary
             "total_loss": MeanMetric()
         }
-        self.build_losses_and_metrics()
+        self.register_losses_and_metrics()
         if len(self.losses) == 0:
             raise ValueError("No losses defined.")
         self.freeze_parameters()  # caution: this can break when resuming training
@@ -47,7 +47,7 @@ class BaseLightningModule(lightning.pytorch.LightningModule, abc.ABC):
 
         self.use_ema = self.training_config.weight_averaging.ema_enabled
         if self.use_ema:
-            self.ema = self.build_ema()
+            self.ema: ExponentialMovingAverage = self.build_ema()
 
         self.train_dataset: BaseDataset = None
         self.valid_dataset: BaseDataset = None
@@ -60,22 +60,41 @@ class BaseLightningModule(lightning.pytorch.LightningModule, abc.ABC):
 
     @abc.abstractmethod
     def build_model(self) -> nn.Module:
+        """Build and return the model."""
         pass
 
     @abc.abstractmethod
-    def build_losses_and_metrics(self):
+    def register_losses_and_metrics(self) -> None:
+        """
+        Register the losses and metrics.
+        Use `self.register_loss(name, loss)` to register a loss,
+        and `self.register_metric(name, metric)` to register a metric.
+        Registered losses and metrics can be accessed via `self.losses` and `self.metrics`.
+        """
         pass
 
-    def post_init(self):
-        """This method is called after the model is initialized, useful for custom initialization logic"""
+    def post_init(self) -> None:
+        """This method is called after the model is initialized, useful for custom initialization logic."""
         pass
 
     @abc.abstractmethod
     def forward_model(self, sample: dict[str, torch.Tensor], infer: bool) -> dict[str, torch.Tensor]:
+        """
+        Forward pass of the model.
+        :param sample: the training or validation batch.
+        :param infer: whether in inference mode.
+        :return: if `infer` is True, update all registered metrics and return the model outputs;
+            otherwise, return a dictionary containing values of all registered losses.
+        """
         pass
 
     @abc.abstractmethod
-    def plot_validation_results(self, sample: dict[str, torch.Tensor], outputs: dict[str, torch.Tensor]):
+    def plot_validation_results(self, sample: dict[str, torch.Tensor], outputs: dict[str, torch.Tensor]) -> None:
+        """
+        Plot the validation results on external logger like TensorBoard.
+        :param sample: the validation batch.
+        :param outputs: the model outputs returned by `self.forward_model(sample, infer=True)` directly.
+        """
         pass
 
     def print_arch(self):
@@ -96,7 +115,7 @@ class BaseLightningModule(lightning.pytorch.LightningModule, abc.ABC):
                     break
         rank_zero_info(f"Freezing {frozen_count} parameter(s).")
 
-    def build_ema(self):
+    def build_ema(self) -> ExponentialMovingAverage:
         parameters = dict(self.named_parameters())
         _apply_include_exclude(
             parameters,
@@ -110,7 +129,7 @@ class BaseLightningModule(lightning.pytorch.LightningModule, abc.ABC):
         rank_zero_info(f"EMA: {ema.size()} parameter(s) registered.")
         return ema
 
-    def load_from_pretrained_model(self, pretrained_model_path: pathlib.Path):
+    def load_from_pretrained_model(self, pretrained_model_path: pathlib.Path) -> None:
         ckpt = torch.load(
             pretrained_model_path, map_location=self.device, weights_only=True
         )
@@ -148,21 +167,33 @@ class BaseLightningModule(lightning.pytorch.LightningModule, abc.ABC):
                 f"Loaded {len(source_ema_state_dict)} EMA parameter(s) from '{pretrained_model_path}'"
             )
 
-    def register_loss(self, name: str, loss: nn.Module):
+    def register_loss(self, name: str, loss: nn.Module) -> None:
+        """
+        Register a loss module that can be accessed via `self.losses`.
+        """
         if name in self.losses:
             raise ValueError(f"Loss '{name}' already registered.")
         self.losses[name] = loss
         self.val_losses[name] = MeanMetric()  # for validation logging
 
-    def register_metric(self, name: str, metric: Metric):
+    def register_metric(self, name: str, metric: Metric) -> None:
+        """
+        Register a metric that can be accessed via `self.metrics`.
+        """
         if name in self.metrics:
             raise ValueError(f"Metric '{name}' already registered.")
         self.metrics[name] = metric
 
-    def build_train_dataset(self):
+    def build_train_dataset(self) -> BaseDataset:
+        """
+        Build the training dataset.
+        """
         return BaseDataset(self.binary_data_dir, "train")
 
-    def build_valid_dataset(self):
+    def build_valid_dataset(self) -> BaseDataset:
+        """
+        Build the validation dataset.
+        """
         return BaseDataset(self.binary_data_dir, "valid")
 
     def setup(self, stage: str) -> None:
