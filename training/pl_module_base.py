@@ -1,10 +1,12 @@
 import abc
 import pathlib
 from fnmatch import fnmatch
+from typing import Union, Optional, Callable, Any
 
 import lightning.pytorch
 import torch
 import tqdm
+from lightning.pytorch.core.optimizer import LightningOptimizer
 from lightning_utilities.core.rank_zero import rank_zero_info
 from torch import nn
 from torch.optim import Optimizer
@@ -300,7 +302,15 @@ class BaseLightningModule(lightning.pytorch.LightningModule, abc.ABC):
             }
         }
 
-    def on_before_zero_grad(self, optimizer: Optimizer) -> None:
+
+    def optimizer_step(
+        self,
+        epoch: int,
+        batch_idx: int,
+        optimizer: Union[Optimizer, LightningOptimizer],
+        optimizer_closure: Optional[Callable[[], Any]] = None,
+    ) -> None:
+        super().optimizer_step(epoch=epoch, batch_idx=batch_idx, optimizer=optimizer, optimizer_closure=optimizer_closure)
         if self.enabled_ema:
             self.exponential_moving_average.update()
 
