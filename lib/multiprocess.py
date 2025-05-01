@@ -1,15 +1,7 @@
 import platform
-import re
 import traceback
 
-from torch.multiprocessing import Manager, Process, current_process, get_context
-
-is_main_process = not bool(re.match(r'((.*Process)|(SyncManager)|(.*PoolWorker))-\d+', current_process().name))
-
-
-def main_process_print(self, *args, sep=' ', end='\n', file=None):
-    if is_main_process:
-        print(self, *args, sep=sep, end=end, file=file)
+from torch.multiprocessing import Manager, Process, get_context
 
 
 def chunked_worker_run(map_func, args, results_queue=None):

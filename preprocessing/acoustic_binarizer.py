@@ -8,6 +8,7 @@ import dask
 import numpy
 
 from lib.config.schema import DataSourceConfig
+from lib.functional import resize_curve
 from .binarizer_base import MetadataItem, BaseBinarizer, DataSample
 
 ACOUSTIC_ITEM_ATTRIBUTES = [
@@ -161,9 +162,9 @@ class AcousticBinarizer(BaseBinarizer):
         for shift, speed in augmentation_params:
             mel_transform, length_transform = self.get_mel(waveform, shift=shift, speed=speed)
             ph_dur_transform = self.sec_dur_to_frame_dur(ph_dur_sec / speed, length_transform)
-            f0_transform = self.resize_curve(data["f0"] * 2 ** (shift / 12), length_transform)
+            f0_transform = dask.delayed(resize_curve)(data["f0"] * 2 ** (shift / 12), length_transform)
             v_transform = {
-                v_name: self.resize_curve(data[v_name], length_transform)
+                v_name: dask.delayed(resize_curve)(data[v_name], length_transform)
                 for v_name in self.config.features.enabled_variance_names
             }
             data_transform = sample.data.copy()
@@ -190,11 +191,3 @@ class AcousticBinarizer(BaseBinarizer):
             samples.append(sample_transform)
 
         return samples
-
-    @dask.delayed
-    def resize_curve(self, curve: numpy.ndarray, target_length: int):
-        original_length = len(curve)
-        original_indices = numpy.linspace(0, original_length - 1, num=original_length)
-        target_indices = numpy.linspace(0, original_length - 1, num=target_length)
-        interpolated_curve = numpy.interp(target_indices, original_indices, curve).astype(curve.dtype)
-        return interpolated_curve

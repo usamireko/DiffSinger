@@ -17,11 +17,10 @@ from modules.fastspeech.param_adaptor import VARIANCE_CHECKLIST
 from modules.commons.tts_modules import (
     LengthRegulator, RhythmRegulator
 )
-from lib.functional import mel2ph_to_dur
+from lib.functional import mel2ph_to_dur, resample_align_curve
 from modules.toplevel import DiffSingerVariance
 from utils import load_ckpt
 from utils.hparams import hparams
-from utils.infer_utils import resample_align_curve
 from lib.vocabulary import load_phoneme_dictionary
 from lib.feature.pitch import interp_f0
 

@@ -4,7 +4,7 @@ import torch
 from torch import nn
 
 from lib.config.schema import DiffusionDecoderConfig
-from utils import filter_kwargs
+from lib.reflection import filter_kwargs_by_class
 from .aux_decoder import AUX_DECODERS
 from .backbone import BACKBONES
 from .core import RectifiedFlow
@@ -37,12 +37,12 @@ class DiffusionDecoder(nn.Module):
         if self.use_shallow_diffusion:
             self.aux_decoder_grad = config.aux_decoder_grad
             self.aux_decoder = (cls := AUX_DECODERS[config.aux_decoder_arch])(
-                condition_dim, sample_dim, **filter_kwargs(config.aux_decoder_kwargs, cls)
+                condition_dim, sample_dim, **filter_kwargs_by_class(cls, config.aux_decoder_kwargs)
             )
         self.decoder = RectifiedFlow(
             sample_dim=sample_dim,
             backbone=(cls := BACKBONES[config.backbone_arch])(
-                sample_dim, condition_dim, **filter_kwargs(config.backbone_kwargs, cls)
+                sample_dim, condition_dim, **filter_kwargs_by_class(cls, config.backbone_kwargs)
             ),
             time_scale_factor=config.time_scale_factor
         )

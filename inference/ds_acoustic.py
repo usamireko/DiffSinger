@@ -14,7 +14,8 @@ from modules.toplevel import DiffSingerAcoustic, ShallowDiffusionOutput
 from modules.vocoders.registry import VOCODERS
 from utils import load_ckpt
 from utils.hparams import hparams
-from utils.infer_utils import cross_fade, resample_align_curve, save_wav
+from utils.infer_utils import cross_fade, save_wav
+from lib.functional import resample_align_curve
 from lib.vocabulary import load_phoneme_dictionary
 
 

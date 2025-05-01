@@ -19,11 +19,11 @@ from lib.feature.decomposition import (
 )
 from lib.feature.mel import StretchableMelSpectrogram
 from lib.feature.pitch import get_pitch_parselmouth, get_pitch_harvest
+from lib.functional import resample_align_curve
+from lib.indexed_dataset import IndexedDatasetBuilder
+from lib.multiprocess import chunked_multiprocess_run
+from lib.plot import distribution_to_figure
 from modules.commons.tts_modules import LengthRegulator
-from utils.indexed_datasets import IndexedDatasetBuilder
-from utils.infer_utils import resample_align_curve
-from utils.multiprocess_utils import chunked_multiprocess_run
-from utils.plot import distribution_to_figure
 
 
 @dataclass

@@ -3,18 +3,17 @@ import torch
 import torch.distributions
 import torch.optim
 import torch.utils.data
-
-import utils
-import utils.infer_utils
 from basics.base_dataset import BaseDataset
 from basics.base_task import BaseTask
+from utils.hparams import hparams
+
+from lib.functional import collate_nd, random_continuous_masks
+from lib.plot import dur_to_figure, pitch_note_to_figure, curve_to_figure
 from modules.losses import DurationLoss, DiffusionLoss, RectifiedFlowLoss
 from modules.metrics import (
     RawCurveAccuracy, RawCurveR2Score, RhythmCorrectness, PhonemeDurationAccuracy
 )
 from modules.toplevel import DiffSingerVariance
-from utils.hparams import hparams
-from utils.plot import dur_to_figure, pitch_note_to_figure, curve_to_figure
 
 matplotlib.use('Agg')
 
@@ -33,8 +32,8 @@ class VarianceDataset(BaseDataset):
         if batch['size'] == 0:
             return batch
 
-        tokens = utils.collate_nd([s['tokens'] for s in samples], 0)
-        ph_dur = utils.collate_nd([s['ph_dur'] for s in samples], 0)
+        tokens = collate_nd([s['tokens'] for s in samples], 0)
+        ph_dur = collate_nd([s['ph_dur'] for s in samples], 0)
         batch.update({
             'tokens': tokens,
             'ph_dur': ph_dur
@@ -43,30 +42,30 @@ class VarianceDataset(BaseDataset):
         if hparams['use_spk_id']:
             batch['spk_ids'] = torch.LongTensor([s['spk_id'] for s in samples])
         if hparams['use_lang_id']:
-            batch['languages'] = utils.collate_nd([s['languages'] for s in samples], 0)
+            batch['languages'] = collate_nd([s['languages'] for s in samples], 0)
         if hparams['predict_dur']:
-            batch['ph2word'] = utils.collate_nd([s['ph2word'] for s in samples], 0)
-            batch['midi'] = utils.collate_nd([s['midi'] for s in samples], 0)
+            batch['ph2word'] = collate_nd([s['ph2word'] for s in samples], 0)
+            batch['midi'] = collate_nd([s['midi'] for s in samples], 0)
         if hparams['predict_pitch']:
-            batch['note_midi'] = utils.collate_nd([s['note_midi'] for s in samples], -1)
-            batch['note_rest'] = utils.collate_nd([s['note_rest'] for s in samples], True)
-            batch['note_dur'] = utils.collate_nd([s['note_dur'] for s in samples], 0)
+            batch['note_midi'] = collate_nd([s['note_midi'] for s in samples], -1)
+            batch['note_rest'] = collate_nd([s['note_rest'] for s in samples], True)
+            batch['note_dur'] = collate_nd([s['note_dur'] for s in samples], 0)
             if hparams['use_glide_embed']:
-                batch['note_glide'] = utils.collate_nd([s['note_glide'] for s in samples], 0)
-            batch['mel2note'] = utils.collate_nd([s['mel2note'] for s in samples], 0)
-            batch['base_pitch'] = utils.collate_nd([s['base_pitch'] for s in samples], 0)
+                batch['note_glide'] = collate_nd([s['note_glide'] for s in samples], 0)
+            batch['mel2note'] = collate_nd([s['mel2note'] for s in samples], 0)
+            batch['base_pitch'] = collate_nd([s['base_pitch'] for s in samples], 0)
         if hparams['predict_pitch'] or self.predict_variances:
-            batch['mel2ph'] = utils.collate_nd([s['mel2ph'] for s in samples], 0)
-            batch['pitch'] = utils.collate_nd([s['pitch'] for s in samples], 0)
-            batch['uv'] = utils.collate_nd([s['uv'] for s in samples], True)
+            batch['mel2ph'] = collate_nd([s['mel2ph'] for s in samples], 0)
+            batch['pitch'] = collate_nd([s['pitch'] for s in samples], 0)
+            batch['uv'] = collate_nd([s['uv'] for s in samples], True)
         if hparams['predict_energy']:
-            batch['energy'] = utils.collate_nd([s['energy'] for s in samples], 0)
+            batch['energy'] = collate_nd([s['energy'] for s in samples], 0)
         if hparams['predict_breathiness']:
-            batch['breathiness'] = utils.collate_nd([s['breathiness'] for s in samples], 0)
+            batch['breathiness'] = collate_nd([s['breathiness'] for s in samples], 0)
         if hparams['predict_voicing']:
-            batch['voicing'] = utils.collate_nd([s['voicing'] for s in samples], 0)
+            batch['voicing'] = collate_nd([s['voicing'] for s in samples], 0)
         if hparams['predict_tension']:
-            batch['tension'] = utils.collate_nd([s['tension'] for s in samples], 0)
+            batch['tension'] = collate_nd([s['tension'] for s in samples], 0)
 
         return batch
 
@@ -75,7 +74,7 @@ def random_retake_masks(b, t, device):
     # 1/4 segments are True in average
     B_masks = torch.randint(low=0, high=4, size=(b, 1), dtype=torch.long, device=device) == 0
     # 1/3 frames are True in average
-    T_masks = utils.random_continuous_masks(b, t, dim=1, device=device)
+    T_masks = random_continuous_masks(b, t, dim=1, device=device)
     # 1/4 segments and 1/2 frames are True in average (1/4 + 3/4 * 1/3 = 1/2)
     return B_masks | T_masks
 

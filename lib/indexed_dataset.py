@@ -3,7 +3,6 @@ from collections import deque
 
 import h5py
 import numpy
-import numpy as np
 import torch
 
 
@@ -85,21 +84,3 @@ class IndexedDatasetBuilder:
 
     def finalize(self):
         self.dset.close()
-
-
-if __name__ == "__main__":
-    import random
-    from tqdm import tqdm
-
-    ds_path = "./assets/indexed_ds_example"
-    size = 100
-    items = [{"a": np.random.normal(size=[10000, 10]),
-              "b": np.random.normal(size=[10000, 10])} for i in range(size)]
-    builder = IndexedDatasetBuilder(ds_path, "example")
-    for i in tqdm(range(size)):
-        builder.add_item(items[i])
-    builder.finalize()
-    ds = IndexedDataset(ds_path, "example")
-    for i in tqdm(range(10000)):
-        idx = random.randint(0, size - 1)
-        assert (ds[idx]["a"] == items[idx]["a"]).all()

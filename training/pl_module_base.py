@@ -12,7 +12,7 @@ from torchmetrics import Metric, MeanMetric
 
 from lib.config.schema import ModelConfig, TrainingConfig
 from lib.reflection import build_optimizer_from_config, build_lr_scheduler_from_config
-from .dataset import BaseDataset, DynamicBatchSampler
+from .data import BaseDataset, DynamicBatchSampler
 from .weight_averaging import ExponentialMovingAverage
 
 __all__ = [

@@ -2,7 +2,7 @@ import torch
 from torch import nn
 
 from lib.config.schema import LinguisticEncoderConfig, MelodyEncoderConfig
-from utils import filter_kwargs
+from lib.reflection import filter_kwargs_by_class
 from .commons.common_layers import (
     NormalInitEmbedding as Embedding,
     XavierUniformInitLinear as Linear,
@@ -28,7 +28,7 @@ class LinguisticEncoder(nn.Module):
             self.language_embedding = Embedding(config.num_lang + 1, config.hidden_size, padding_idx=0)
         self.duration_embedding = Linear(1, config.hidden_size)
         self.encoder = (cls := ENCODERS[config.arch])(
-            hidden_size=config.hidden_size, **filter_kwargs(config.kwargs, cls)
+            hidden_size=config.hidden_size, **filter_kwargs_by_class(cls, config.kwargs)
         )
 
     def forward(self, tokens, durations, languages=None):

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+
 import numpy as np
 import torch
 import torch.nn.functional as F
@@ -8,7 +9,7 @@ import torch.onnx.operators
 from torch import nn
 from torch.nn import LayerNorm, MultiheadAttention, ReLU, GELU, SiLU
 
-import utils
+import lib.functional
 
 
 class NormalInitEmbedding(torch.nn.Embedding):
@@ -95,7 +96,7 @@ class SinusoidalPositionalEmbedding(nn.Module):
             pos = timestep.view(-1)[0] + 1 if timestep is not None else seq_len
             return self.weights[self.padding_idx + pos, :].expand(bsz, 1, -1)
 
-        positions = utils.make_positions(x, self.padding_idx) if positions is None else positions
+        positions = lib.functional.make_positions(x, self.padding_idx) if positions is None else positions
         return self.weights.index_select(0, positions.view(-1)).view(bsz, seq_len, -1).detach()
 
     @staticmethod

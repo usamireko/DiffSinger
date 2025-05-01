@@ -3,8 +3,8 @@ import pathlib
 import numpy
 import torch
 
-from utils import collate_nd
-from utils.indexed_datasets import IndexedDataset
+from lib.functional import collate_nd
+from lib.indexed_dataset import IndexedDataset
 
 
 class BaseDataset(torch.utils.data.Dataset):

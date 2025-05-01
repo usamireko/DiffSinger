@@ -5,7 +5,7 @@ from torch import Tensor
 from typing import Tuple, Dict
 
 from utils.hparams import hparams
-from utils.infer_utils import resample_align_curve
+from lib.functional import resample_align_curve
 
 
 class BaseSVSInfer:

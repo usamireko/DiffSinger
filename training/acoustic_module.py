@@ -2,11 +2,11 @@ import torch
 from lightning.pytorch.loggers import TensorBoardLogger
 from torch import nn
 
+from lib.plot import spec_to_figure
 from modules.decoder import ShallowDiffusionOutput
 from modules.losses import RectifiedFlowLoss
 from modules.toplevel import DiffSingerAcoustic
 from modules.vocoder import Vocoder
-from utils.plot import spec_to_figure
 from .pl_module_base import BaseLightningModule
 
 

@@ -10,7 +10,7 @@ import torch
 
 from lib.config.schema import DataSourceConfig, DataConfig
 from lib.feature.pitch import interp_f0
-from utils.plot import distribution_to_figure
+from lib.plot import distribution_to_figure
 from .binarizer_base import MetadataItem, BaseBinarizer, DataSample
 
 VARIANCE_ITEM_ATTRIBUTES = [

@@ -67,8 +67,8 @@ def train_model(
     from lightning_utilities.core.rank_zero import rank_zero_only, rank_zero_info
     from training.pl_module_base import BaseLightningModule
 
-    from training.checkpoint import PeriodicModelCheckpoint, ExpressionModelCheckpoint
-    from utils.training_utils import DsTQDMProgressBar, get_strategy
+    from training.callbacks import PeriodicModelCheckpoint, ExpressionModelCheckpoint, FriendlyTQDMProgressBar
+    from training.strategy import get_strategy
 
     if not issubclass(pl_module_cls, BaseLightningModule):
         raise ValueError("pl_module_cls must be a subclass of BaseLightningModule")
@@ -112,7 +112,7 @@ def train_model(
     else:
         raise ValueError(f"Unit must be 'step' or 'epoch', got '{training_config.trainer.unit}'.")
     callbacks = [
-        DsTQDMProgressBar()
+        FriendlyTQDMProgressBar()
     ]
     for ckpt_config in training_config.trainer.checkpoints:
         if ckpt_config.type == "periodic":
