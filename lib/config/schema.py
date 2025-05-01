@@ -719,6 +719,13 @@ class FinetuningConfig(ConfigBaseModel):
     frozen_params: list[str] = Field([])
 
 
+class WeightAveragingConfig(ConfigBaseModel):
+    ema_enabled: bool = Field(False)
+    ema_decay: float = Field(0.999, gt=0, le=1)
+    ema_include_params: list[str] = Field(["model.*"])
+    ema_exclude_params: list[str] = Field([])
+
+
 class TrainingConfig(ConfigBaseModel):
     loss: LossConfig = Field(...)
     dataloader: DataLoaderConfig = Field(...)
@@ -727,6 +734,7 @@ class TrainingConfig(ConfigBaseModel):
     trainer: TrainerConfig = Field(...)
     validation: ValidationConfig = Field(...)
     finetuning: FinetuningConfig = Field(...)
+    weight_averaging: WeightAveragingConfig = Field(...)
 
 
 class InferenceConfig(ConfigBaseModel):

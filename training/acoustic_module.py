@@ -11,13 +11,16 @@ from .pl_module_base import BaseLightningModule
 
 
 class AcousticLightningModule(BaseLightningModule):
-    # noinspection PyAttributeOutsideInit
     def build_model(self):
-        self.model = DiffSingerAcoustic(self.model_config)
+        return DiffSingerAcoustic(self.model_config)
+
+    # noinspection PyAttributeOutsideInit
+    def post_init(self):
         if self.training_config.validation.use_vocoder:
             self.vocoder = Vocoder(self.training_config.validation.vocoder)
         else:
             self.vocoder = None
+        self.logged_gt_wav_indices = set()
 
     def setup(self, stage: str) -> None:
         super().setup(stage)
@@ -42,8 +45,6 @@ class AcousticLightningModule(BaseLightningModule):
             log_norm=self.training_config.loss.spec_decoder.main_loss_log_norm
         )
         self.register_loss("diff_spec_loss", diff_spec_loss)
-        # noinspection PyAttributeOutsideInit
-        self.logged_gt_wav_indices = set()
 
     def forward_model(self, sample: dict[str, torch.Tensor], infer: bool) -> dict[str, torch.Tensor]:
         sample = sample.copy()

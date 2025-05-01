@@ -1,6 +1,7 @@
 import abc
 import pathlib
 from fnmatch import fnmatch
+from typing import Any
 
 import lightning.pytorch
 import torch
@@ -12,6 +13,11 @@ from torchmetrics import Metric, MeanMetric
 from lib.config.schema import ModelConfig, TrainingConfig
 from lib.reflection import build_optimizer_from_config, build_lr_scheduler_from_config
 from .dataset import BaseDataset, DynamicBatchSampler
+from .ema import ExponentialMovingAverage
+
+__all__ = [
+    "BaseLightningModule",
+]
 
 
 class BaseLightningModule(lightning.pytorch.LightningModule, abc.ABC):
@@ -22,11 +28,12 @@ class BaseLightningModule(lightning.pytorch.LightningModule, abc.ABC):
             training_config: TrainingConfig
     ):
         super().__init__()
+
         self.binary_data_dir = binary_data_dir
         self.model_config = model_config
         self.training_config = training_config
-        self.model: nn.Module = None
-        self.build_model()
+
+        self.model: nn.Module = self.build_model()
         self.losses = nn.ModuleDict()
         self.metrics = nn.ModuleDict()
         self.val_losses: dict[str, Metric] = {  # use built-in dict to not be printed in the model summary
@@ -37,18 +44,30 @@ class BaseLightningModule(lightning.pytorch.LightningModule, abc.ABC):
             raise ValueError("No losses defined.")
         self.freeze_parameters()  # caution: this can break when resuming training
         self.print_arch()
+
+        self.use_ema = self.training_config.weight_averaging.ema_enabled
+        if self.use_ema:
+            self.ema = self.build_ema()
+
         self.train_dataset: BaseDataset = None
         self.valid_dataset: BaseDataset = None
         self.train_sampler: DynamicBatchSampler = None
         self.valid_sampler: DynamicBatchSampler = None
+
         self.logger_step = -1  # when accumulate_grad_batches > 1, this helps to avoid redundant logging
 
+        self.post_init()
+
     @abc.abstractmethod
-    def build_model(self):
+    def build_model(self) -> nn.Module:
         pass
 
     @abc.abstractmethod
     def build_losses_and_metrics(self):
+        pass
+
+    def post_init(self):
+        """This method is called after the model is initialized, useful for custom initialization logic"""
         pass
 
     @abc.abstractmethod
@@ -77,48 +96,57 @@ class BaseLightningModule(lightning.pytorch.LightningModule, abc.ABC):
                     break
         rank_zero_info(f"Freezing {frozen_count} parameter(s).")
 
+    def build_ema(self):
+        parameters = dict(self.named_parameters())
+        _apply_include_exclude(
+            parameters,
+            includes=self.training_config.weight_averaging.ema_include_params,
+            excludes=self.training_config.weight_averaging.ema_exclude_params
+        )
+        ema = ExponentialMovingAverage(
+            parameters=parameters,
+            decay=self.training_config.weight_averaging.ema_decay
+        )
+        rank_zero_info(f"EMA: {ema.size()} parameter(s) registered.")
+        return ema
+
     def load_from_pretrained_model(self, pretrained_model_path: pathlib.Path):
-        source_state_dict = torch.load(
+        ckpt = torch.load(
             pretrained_model_path, map_location=self.device, weights_only=True
-        )["state_dict"]
-        includes = self.training_config.finetuning.pretraining_include_params
-        excludes = self.training_config.finetuning.pretraining_exclude_params
-        if includes:
-            include_names = set()
-            for pattern in includes:
-                include_names.update(
-                    name for name in source_state_dict.keys() if fnmatch(name, pattern)
-                )
-            source_state_dict = {k: v for k, v in source_state_dict.items() if k in include_names}
-        if excludes:
-            exclude_names = set()
-            for pattern in excludes:
-                exclude_names.update(
-                    name for name in source_state_dict.keys() if fnmatch(name, pattern)
-                )
-            source_state_dict = {k: v for k, v in source_state_dict.items() if k not in exclude_names}
+        )
+        source_state_dict = ckpt["state_dict"]
+        _apply_include_exclude(
+            source_state_dict,
+            includes=self.training_config.finetuning.pretraining_include_params,
+            excludes=self.training_config.finetuning.pretraining_exclude_params
+        )
         target_state_dict = self.state_dict()
-        errors = []
         for name in list(source_state_dict.keys()):
             if name not in target_state_dict:
                 del source_state_dict[name]
-            source_param = source_state_dict[name]
-            target_param = target_state_dict[name]
-            if source_param.shape != target_param.shape:
-                errors.append((name, tuple(source_param.shape), tuple(target_param.shape)))
-                del source_state_dict[name]
-        if errors:
-            raise RuntimeError(
-                f"Pretrained model '{pretrained_model_path}' has {len(errors)} mismatched parameter(s):\n"
-                + "\n".join(
-                    f"  {name}: source {source_shape}, target {target_shape}"
-                    for name, source_shape, target_shape in errors
-                )
-            )
+        _check_shape_consistency(
+            source_state_dict, target_state_dict,
+            error_message=f"Pretrained model '{pretrained_model_path}' has mismatched parameter(s)"
+        )
         self.load_state_dict(source_state_dict, strict=False)
         rank_zero_info(
             f"Loaded {len(source_state_dict)} parameter(s) from '{pretrained_model_path}'"
         )
+        if self.use_ema:
+            self.ema.register()  # copy to shadow again after updating referenced parameters
+            source_ema_state_dict = ckpt.get("ema_state_dict", {})
+            target_ema_state_dict = self.ema.state_dict()
+            for name in list(source_ema_state_dict.keys()):
+                if name not in source_state_dict or name not in target_ema_state_dict:
+                    del source_ema_state_dict[name]
+            _check_shape_consistency(
+                source_ema_state_dict, target_ema_state_dict,
+                error_message=f"Pretrained model '{pretrained_model_path}' has mismatched EMA parameter(s)"
+            )
+            self.ema.load_state_dict(source_ema_state_dict, strict=False)
+            rank_zero_info(
+                f"Loaded {len(source_ema_state_dict)} EMA parameter(s) from '{pretrained_model_path}'"
+            )
 
     def register_loss(self, name: str, loss: nn.Module):
         if name in self.losses:
@@ -184,6 +212,39 @@ class BaseLightningModule(lightning.pytorch.LightningModule, abc.ABC):
             persistent_workers=dataloader_config.num_workers > 0
         )
 
+    def configure_optimizers(self):
+        optimizer = build_optimizer_from_config(self.model, self.training_config.optimizer)
+        scheduler = build_lr_scheduler_from_config(optimizer, self.training_config.lr_scheduler)
+        interval = self.training_config.lr_scheduler.unit
+        if isinstance(scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
+            if interval != self.training_config.trainer.unit:
+                # ReduceLROnPlateau requires the scheduler to synchronize with the validation period
+                raise ValueError(
+                    f"ReduceLROnPlateau scheduler requires training.lr_scheduler.unit and training.trainer.unit "
+                    f"to be the same, got '{interval}' and '{self.training_config.trainer.unit}'."
+                )
+            # Call scheduler.step() after each validation
+            frequency = self.training_config.trainer.val_every_n_units
+            monitor = self.training_config.lr_scheduler.monitor
+            if monitor not in self.val_losses and monitor not in self.metrics:
+                raise ValueError(
+                    f"Invalid monitor '{monitor}' for ReduceLROnPlateau scheduler. Should be one of "
+                    f"losses {list(self.val_losses.keys())} or metrics {list(self.metrics.keys())}."
+                )
+        else:
+            frequency = 1
+            monitor = None
+        return {
+            "optimizer": optimizer,
+            "lr_scheduler": {
+                "scheduler": scheduler,
+                "interval": interval,
+                "frequency": frequency,
+                "monitor": monitor,
+                "strict": False,  # in case the candidates are empty after resuming
+            }
+        }
+
     def on_train_epoch_start(self):
         if self.train_sampler is not None:
             self.train_sampler.set_epoch(self.current_epoch)
@@ -209,11 +270,18 @@ class BaseLightningModule(lightning.pytorch.LightningModule, abc.ABC):
             self.logger_step = self.global_step
         return total_loss
 
+    def optimizer_step(self, *args, **kwargs):
+        super().optimizer_step(*args, **kwargs)
+        if self.use_ema:
+            self.ema.step()  # update EMA parameters after optimizer step
+
     def on_validation_epoch_start(self):
         for metric in self.val_losses.values():
             # self.val_losses is a built-in dict, so we need to move them to device manually
             metric.to(self.device)
             metric.reset()
+        if self.use_ema:
+            self.ema.apply()  # switch to EMA parameters for validation
 
     def validation_step(self, sample: dict[str, torch.Tensor], batch_index: int):
         if sample["size"] == 0:
@@ -256,36 +324,42 @@ class BaseLightningModule(lightning.pytorch.LightningModule, abc.ABC):
                 outputs = obj["outputs"]
                 self.plot_validation_results(sample, outputs)
                 file.unlink()
+        if self.use_ema:
+            self.ema.restore()  # restore original parameters after validation
 
-    def configure_optimizers(self):
-        optimizer = build_optimizer_from_config(self.model, self.training_config.optimizer)
-        scheduler = build_lr_scheduler_from_config(optimizer, self.training_config.lr_scheduler)
-        interval = self.training_config.lr_scheduler.unit
-        if isinstance(scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
-            if interval != self.training_config.trainer.unit:
-                # ReduceLROnPlateau requires the scheduler to synchronize with the validation period
-                raise ValueError(
-                    f"ReduceLROnPlateau scheduler requires training.lr_scheduler.unit and training.trainer.unit "
-                    f"to be the same, got '{interval}' and '{self.training_config.trainer.unit}'."
-                )
-            # Call scheduler.step() after each validation
-            frequency = self.training_config.trainer.val_every_n_units
-            monitor = self.training_config.lr_scheduler.monitor
-            if monitor not in self.val_losses and monitor not in self.metrics:
-                raise ValueError(
-                    f"Invalid monitor '{monitor}' for ReduceLROnPlateau scheduler. Should be one of "
-                    f"losses {list(self.val_losses.keys())} or metrics {list(self.metrics.keys())}."
-                )
-        else:
-            frequency = 1
-            monitor = None
-        return {
-            "optimizer": optimizer,
-            "lr_scheduler": {
-                "scheduler": scheduler,
-                "interval": interval,
-                "frequency": frequency,
-                "monitor": monitor,
-                "strict": False,  # in case the candidates are empty after resuming
-            }
-        }
+    def on_save_checkpoint(self, checkpoint: dict[str, torch.Tensor]):
+        if self.use_ema:
+            checkpoint["ema_state_dict"] = self.ema.state_dict()
+
+    def on_load_checkpoint(self, checkpoint: dict[str, torch.Tensor]):
+        if self.use_ema:
+            self.ema.load_state_dict(checkpoint.pop("ema_state_dict"), strict=True)
+
+
+def _apply_include_exclude(dict_to_filter: dict[str, Any], includes: list[str] = None, excludes: list[str] = None):
+    for key in list(dict_to_filter.keys()):
+        if includes and not any(fnmatch(key, pattern) for pattern in includes):
+            del dict_to_filter[key]
+        if any(fnmatch(key, pattern) for pattern in excludes):
+            del dict_to_filter[key]
+
+
+def _check_shape_consistency(
+        source_state_dict: dict[str, torch.Tensor],
+        target_state_dict: dict[str, torch.Tensor],
+        error_message: str
+):
+    errors = []
+    for name in list(source_state_dict.keys()):
+        source_param = source_state_dict[name]
+        target_param = target_state_dict[name]
+        if source_param.shape != target_param.shape:
+            errors.append((name, tuple(source_param.shape), tuple(target_param.shape)))
+    if errors:
+        raise RuntimeError(
+            f"{error_message}:\n"
+            + "\n".join(
+                f"  {name}: source {source_shape}, target {target_shape}"
+                for name, source_shape, target_shape in errors
+            )
+        )
