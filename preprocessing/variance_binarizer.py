@@ -10,7 +10,7 @@ import torch
 
 from lib.config.schema import DataSourceConfig, DataConfig
 from lib.feature.pitch import interp_f0
-from utils.plot import distribution_to_figure
+from lib.plot import distribution_to_figure
 from .binarizer_base import MetadataItem, BaseBinarizer, DataSample
 
 VARIANCE_ITEM_ATTRIBUTES = [
@@ -79,7 +79,7 @@ class VarianceBinarizer(BaseBinarizer):
                     parse_results.format(raw_data_dir.as_posix(), item_name)
                 )
             ph_text, lang_seq, ph_seq, ph_dur = parse_results
-            if self.config.midi.used:
+            if self.config.midi.enabled:
                 note_text = transcription["note_seq"].split()
                 note_midi = []
                 note_rest = []
@@ -146,7 +146,7 @@ class VarianceBinarizer(BaseBinarizer):
 
     def check_coverage(self):
         super().check_coverage()
-        if not self.config.midi.used:
+        if not self.config.midi.enabled:
             return
 
         # MIDI pitch distribution summary
@@ -229,7 +229,7 @@ class VarianceBinarizer(BaseBinarizer):
         else:
             f0, uv = self.get_f0(waveform, length)
         pitch = dask.delayed(librosa.hz_to_midi)(f0)
-        if self.config.midi.used:
+        if self.config.midi.enabled:
             note_rest = numpy.array(item.note_rest, dtype=bool)
             note_midi = self.interp_midi(numpy.array(item.note_midi, dtype=numpy.float32), note_rest)
             note_dur_sec = numpy.array(item.note_dur, dtype=numpy.float32)
@@ -252,7 +252,7 @@ class VarianceBinarizer(BaseBinarizer):
             label, "voicing", "voicing_timestep", length
         )
         if voicing is None:
-            voicing = self.get_energy(noise, length, smooth_fn_name="voicing")
+            voicing = self.get_energy(harmonic, length, smooth_fn_name="voicing")
         tension = self.try_load_curve_from_label_if_allowed(
             label, "tension", "tension_timestep", length
         )
@@ -261,14 +261,14 @@ class VarianceBinarizer(BaseBinarizer):
             tension = self.get_tension(harmonic, base_harmonic, length)
 
         data = {
-            "spk_id": item.spk_id,
+            "spk_id": numpy.array(item.spk_id, dtype=numpy.int64),
             "languages": numpy.array(item.lang_seq, dtype=numpy.int64),
             "tokens": numpy.array(item.ph_seq, dtype=numpy.int64),
             "ph_dur": ph_dur,
             "pitch": pitch,
             "uv": uv,
         }
-        if self.config.midi.used:
+        if self.config.midi.enabled:
             data.update({
                 "note_midi": note_midi,
                 "note_rest": note_rest,
@@ -277,22 +277,17 @@ class VarianceBinarizer(BaseBinarizer):
             })
             if self.config.midi.with_glide:
                 data["note_glide"] = numpy.array(item.note_glide, dtype=numpy.int64)
-        variance_names = []
-        if self.config.features.energy.used:
+        if self.config.features.energy.enabled:
             data["energy"] = energy
-            variance_names.append("energy")
-        if self.config.features.breathiness.used:
+        if self.config.features.breathiness.enabled:
             data["breathiness"] = breathiness
-            variance_names.append("breathiness")
-        if self.config.features.voicing.used:
+        if self.config.features.voicing.enabled:
             data["voicing"] = voicing
-            variance_names.append("voicing")
-        if self.config.features.tension.used:
+        if self.config.features.tension.enabled:
             data["tension"] = tension
-            variance_names.append("tension")
-        (data,) = dask.compute(data)
+        uv, data = dask.compute(uv, data)
 
-        if uv.compute().all():
+        if uv.all():
             print(f"Skipped \'{item.item_name}\': empty gt f0")
             return []
         sample = DataSample(

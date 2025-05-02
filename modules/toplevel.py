@@ -5,10 +5,10 @@ from .commons.common_layers import (
     NormalInitEmbedding as Embedding,
     XavierUniformInitLinear as Linear,
 )
+from .commons.tts_modules import LocalUpsample
 from .decoder import DiffusionDecoder, ShallowDiffusionOutput
 from .embedding import ParameterEmbeddings
 from .encoder import LinguisticEncoder, MelodyEncoder
-from modules.commons.tts_modules import LocalUpsample
 from .normalizer import FeatureNormalizer
 
 __all__ = [
@@ -18,16 +18,13 @@ __all__ = [
 
 
 class DiffSingerAcoustic(nn.Module):
-    def __init__(self, vocab_size: int, config: ModelConfig):
+    def __init__(self, config: ModelConfig):
         super().__init__()
-        self.linguistic_encoder = LinguisticEncoder(
-            vocab_size=vocab_size,
-            config=config.linguistic_encoder
-        )
+        self.linguistic_encoder = LinguisticEncoder(config=config.linguistic_encoder)
         self.local_upsample = LocalUpsample()  # tokens to frames
         self.use_spk_embed = config.use_spk_id
         if self.use_spk_embed:
-            self.spk_embed = Embedding(config.num_spk, config.condition_dim)
+            self.speaker_embedding = Embedding(config.num_spk, config.condition_dim)
         self.parameter_embeddings = ParameterEmbeddings(config=config.embeddings)
         self.spec_decoder = DiffusionDecoder(
             sample_dim=config.sample_dim,
@@ -43,21 +40,21 @@ class DiffSingerAcoustic(nn.Module):
 
     def forward(
             self, tokens, durations, languages, f0, spk_ids=None,
-            spk_embed=None, gt_mel=None, infer=True, **kwargs
+            spk_embed=None, spec_gt=None, infer=True, **kwargs
     ) -> ShallowDiffusionOutput:
         encoder_out = self.linguistic_encoder(tokens=tokens, durations=durations, languages=languages)
-        cond = self.local_upsample(encoder_out, ups=durations)
+        cond, mask = self.local_upsample(encoder_out, ups=durations)
         if self.use_spk_embed:
             if spk_embed is None:
-                spk_embed = self.spk_embed(spk_ids)[:, None, :]
+                spk_embed = self.speaker_embedding(spk_ids)[:, None, :]
             cond = cond + spk_embed
         cond = self.parameter_embeddings(cond, f0=f0, **kwargs)
-        decoder_out = self.spec_decoder(condition=cond, sample_gt=gt_mel, infer=infer)
-        return decoder_out
+        decoder_out = self.spec_decoder(condition=cond, sample_gt=spec_gt, infer=infer)
+        return decoder_out, mask
 
 
 class DiffSingerVariance(nn.Module):
-    def __init__(self, vocab_size: int, config: ModelConfig):
+    def __init__(self, config: ModelConfig):
         super().__init__()
         self.predict_pitch = config.prediction.predict_pitch
         variance_list = []
@@ -94,10 +91,7 @@ class DiffSingerVariance(nn.Module):
         if not self.predict_pitch and not self.predict_variances:
             raise ValueError("Nothing to predict.")
 
-        self.linguistic_encoder = LinguisticEncoder(
-            vocab_size=vocab_size,
-            config=config.linguistic_encoder
-        )
+        self.linguistic_encoder = LinguisticEncoder(config=config.linguistic_encoder)
         self.local_upsample = LocalUpsample()
         self.use_spk_embed = config.use_spk_id
         if self.use_spk_embed:
@@ -144,7 +138,7 @@ class DiffSingerVariance(nn.Module):
             infer=True, **kwargs
     ):
         linguistic_encoder_out = self.linguistic_encoder(tokens=tokens, durations=durations, languages=languages)
-        cond = self.local_upsample(linguistic_encoder_out, ups=durations)
+        cond, mask = self.local_upsample(linguistic_encoder_out, ups=durations)
         if self.use_spk_embed:
             if spk_embed is None:
                 spk_embed = self.spk_embed(spk_ids)[:, None, :]
@@ -154,7 +148,7 @@ class DiffSingerVariance(nn.Module):
                 note_midi=note_midi, note_rest=note_rest, note_dur=note_dur, glide=note_glide
             )
             # TODO: add pitch retaking and expressiveness
-            pitch_cond = cond + self.local_upsample(melody_encoder_out, ups=note_dur)
+            pitch_cond = cond + self.local_upsample(melody_encoder_out, ups=note_dur)[0]
             pitch_predictor_out = self.pitch_predictor(condition=pitch_cond, sample_gt=pitch, infer=infer)
             pitch_predictor_out = pitch_predictor_out.diff_out  # no shallow diffusion yet
         else:
@@ -169,4 +163,4 @@ class DiffSingerVariance(nn.Module):
             variance_predictor_out = variance_predictor_out.diff_out  # no shallow diffusion yet
         else:
             variance_predictor_out = None
-        return pitch_predictor_out, variance_predictor_out
+        return pitch_predictor_out, variance_predictor_out, mask

@@ -48,19 +48,17 @@ binarizer:
       num_bins: 128
       fmin: 40
       fmax: 16000
-      vmin: -12
-      vmax: 0
     energy:
-      used: true
+      enabled: true
       smooth_width: 0.12
     breathiness:
-      used: true
+      enabled: true
       smooth_width: 0.12
     voicing:
-      used: true
+      enabled: true
       smooth_width: 0.12
     tension:
-      used: true
+      enabled: true
       smooth_width: 0.12
   augmentation:
     random_pitch_shifting:
@@ -122,11 +120,17 @@ model:
       strong_cond: true
 
 training:
-  batch_sampler:
+  loss:
+    spec_decoder:
+      main_loss_type: L2
+      main_loss_log_norm: false
+      aux_loss_type: L1
+  dataloader:
     max_batch_frames: 50000
-    max_batch_size: 64
+    max_batch_size: 48
+    max_val_batch_frames: 20000
+    max_val_batch_size: 1
     frame_count_grid: 6
-  data_loader:
     num_workers: 4
     prefetch_factor: 2
   optimizer:
@@ -137,32 +141,41 @@ training:
       weight_decay: 0
   lr_scheduler:
     cls: torch.optim.lr_scheduler.StepLR
-    unit: "step"
     kwargs:
       step_size: 50000
       gamma: 0.5
+    unit: "step"
   trainer:
     unit: "step"
     min_steps: 0
     max_steps: 120000
     min_epochs: 0
     max_epochs: 1000
+    val_every_n_units: 2000
+    log_every_n_steps: 100
+    num_sanity_val_steps: 1
     checkpoints:
-      - prefix: "model_ckpt_temp"
-        monitor: "unit"
-        save_top_k: 1
-        every_n_units: 2000
-        since_m_units: 0
-      - prefix: "model_ckpt_perm"
-        monitor: "unit"
-        save_top_k: -1
-        every_n_units: 20000
-        since_m_units: 80000
-      - prefix: "model_ckpt"
-        monitor: "metric"
-        expr: "total_loss"
+      - tag: "best"
+        type: "expression"
+        expression: "total_loss"
         save_top_k: 5
         mode: "min"
+        weights_only: false
+      - tag: "temp"
+        type: "periodic"
+        unit: "step"
+        every_n_units: 2000
+        since_m_units: 0
+        save_last_k: 2
+        weights_only: false
+      - tag: "perm"
+        type: "periodic"
+        unit: "step"
+        every_n_units: 20000
+        since_m_units: 80000
+        save_last_k: -1
+        weights_only: false
+    precision: "16-mixed"
     accelerator: "auto"
     devices: "auto"
     num_nodes: 1
@@ -171,8 +184,27 @@ training:
       kwargs:
         process_group_backend: nccl
         find_unused_parameters: false
-    precision: "16-mixed"
-    val_every_n_units: 2000
-    log_every_n_steps: 1
-    num_sanity_val_steps: 1
     accumulate_grad_batches: 1
+    gradient_clip_val: 1.0
+  validation:
+    use_vocoder: true
+    spec_vmin: -14.
+    spec_vmax: 4.
+    max_plots: 10
+  finetuning:
+    pretraining_enabled: false
+    pretraining_from: null
+    pretraining_include_params: ["model.*"]
+    pretraining_exclude_params: []
+    freezing_enabled: false
+    frozen_params: []
+  weight_averaging:
+    ema_enabled: false
+    ema_decay: 0.999
+    ema_include_params: ["model.*"]
+    ema_exclude_params: []
+
+inference:
+  vocoder:
+    vocoder_type: "nsf-hifigan"
+    vocoder_path: "checkpoints/pc_nsf_hifigan_44.1k_hop512_128bin_2025.02/model.ckpt"

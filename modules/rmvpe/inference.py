@@ -3,8 +3,8 @@ import torch
 import torch.nn.functional as F
 from torchaudio.transforms import Resample
 
-from utils.infer_utils import resample_align_curve
 from lib.feature.pitch import interp_f0
+from lib.functional import resample_align_curve
 from .constants import *
 from .model import E2E0
 from .spec import MelSpectrogram

@@ -2,13 +2,12 @@ import pathlib
 from collections import deque
 
 import h5py
-import numpy as np
+import numpy
 import torch
 
 
 class IndexedDataset:
     def __init__(self, path, prefix, num_cache=0):
-        super().__init__()
         self.path = pathlib.Path(path) / f"{prefix}.data.hdf5"
         if not self.path.exists():
             raise FileNotFoundError(f"IndexedDataset not found: {self.path}")
@@ -32,7 +31,14 @@ class IndexedDataset:
             for c in self.cache:
                 if c[0] == i:
                     return c[1]
-        item = {k: v[()].item() if v.shape == () else torch.from_numpy(v[()]) for k, v in self.dset[str(i)].items()}
+        item = {}
+        for k, v in self.dset[str(i)].items():
+            v = v[()]
+            if v.ndim == 0:  # scalars saved as numpy.ndarray but loaded with numpy scalar types
+                v = torch.tensor(v)
+            else:
+                v = torch.from_numpy(v)
+            item[k] = v
         if self.num_cache > 0:
             self.cache.appendleft((i, item))
         return item
@@ -64,6 +70,9 @@ class IndexedDatasetBuilder:
                 for k in self.allowed_attr
                 if k in item
             }
+        for k, v in item.items():
+            if not isinstance(v, numpy.ndarray):
+                raise TypeError(f"Value type of key '{k}' is not a NumPy array")
         if self.auto_increment:
             item_no = self.counter
             self.counter += 1
@@ -75,21 +84,3 @@ class IndexedDatasetBuilder:
 
     def finalize(self):
         self.dset.close()
-
-
-if __name__ == "__main__":
-    import random
-    from tqdm import tqdm
-
-    ds_path = "./assets/indexed_ds_example"
-    size = 100
-    items = [{"a": np.random.normal(size=[10000, 10]),
-              "b": np.random.normal(size=[10000, 10])} for i in range(size)]
-    builder = IndexedDatasetBuilder(ds_path, "example")
-    for i in tqdm(range(size)):
-        builder.add_item(items[i])
-    builder.finalize()
-    ds = IndexedDataset(ds_path, "example")
-    for i in tqdm(range(10000)):
-        idx = random.randint(0, size - 1)
-        assert (ds[idx]["a"] == items[idx]["a"]).all()

@@ -10,7 +10,7 @@ import tqdm
 
 from lib.feature.mel import StretchableMelSpectrogram
 from lib.feature.pitch import get_pitch_parselmouth
-from modules.vocoders.nsf_hifigan import NsfHifiGAN
+from modules.vocoder import NSFHiFiGAN
 from utils.infer_utils import save_wav
 from utils.hparams import set_hparams, hparams
 
@@ -55,7 +55,7 @@ def get_pitch(wav_data, mel, hparams, threshold=0.3):
 
 set_hparams()
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-vocoder = NsfHifiGAN()
+vocoder = NSFHiFiGAN()
 in_path = 'path/to/input/wavs'
 out_path = 'path/to/output/wavs'
 os.makedirs(out_path, exist_ok=True)
@@ -80,5 +80,5 @@ for filename in tqdm.tqdm(os.listdir(in_path)):
         hop_size=hparams['hop_size']
     )
 
-    wav_out = vocoder.spec2wav(mel, f0=f0)
+    wav_out = vocoder.run(mel, f0=f0)
     save_wav(wav_out, os.path.join(out_path, filename), hparams['audio_sample_rate'])

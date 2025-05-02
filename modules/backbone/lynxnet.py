@@ -134,7 +134,7 @@ class LYNXNet(nn.Module):
         :param cond: [B, H, T]
         :return:
         """
-        x = spec.squeeze(1)  # [B, M, T]
+        x = spec[:, 0]  # [B, M, T]
         x = self.input_projection(x)  # x [B, residual_channel, T]
 
         if not self.strong_cond:

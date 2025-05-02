@@ -19,12 +19,11 @@ from lib.feature.decomposition import (
 )
 from lib.feature.mel import StretchableMelSpectrogram
 from lib.feature.pitch import get_pitch_parselmouth, get_pitch_harvest
+from lib.functional import resample_align_curve
+from lib.indexed_dataset import IndexedDatasetBuilder
+from lib.multiprocess import chunked_multiprocess_run
+from lib.plot import distribution_to_figure
 from modules.commons.tts_modules import LengthRegulator
-from utils.indexed_datasets import IndexedDatasetBuilder
-from utils.infer_utils import resample_align_curve
-from utils.multiprocess_utils import chunked_multiprocess_run
-from utils.phoneme_utils import PhonemeDictionary
-from utils.plot import distribution_to_figure
 
 
 @dataclass
@@ -53,16 +52,13 @@ class DataSample:
 
 class BaseBinarizer(abc.ABC):
     __data_attrs__: list[str] = None
+    __augmentation__: bool = False
 
     def __init__(
             self, data_config: DataConfig, binarizer_config: BinarizerConfig,
-            coverage_check_option: Literal["strict", "bypass", "compact"] = "strict"
+            coverage_check_option: Literal["strict", "bypass", "compat"] = "strict"
     ):
-        self.phoneme_dictionary = PhonemeDictionary(
-            dictionaries=data_config.dictionaries,
-            extra_phonemes=data_config.extra_phonemes,
-            merged_groups=data_config.merged_phoneme_groups
-        )
+        self.phoneme_dictionary = data_config.phoneme_dictionary
         self.spk_map = data_config.spk_map
         self.lang_map = data_config.lang_map
         self.sources = data_config.sources
@@ -184,7 +180,7 @@ class BaseBinarizer(abc.ABC):
                         hit = True
                 if not hit:
                     # TODO: change to warning
-                    raise ValueError(
+                    raise RuntimeError(
                         f"Test prefix does not hit any item:\n"
                         f"prefix '{prefix}'"
                     )
@@ -254,8 +250,8 @@ class BaseBinarizer(abc.ABC):
         if self.coverage_check_option == "bypass":
             # bypass: ignore missing phonemes
             return
-        if self.coverage_check_option == "compact":
-            # compact: record missing phonemes and exclude them from the dictionary
+        if self.coverage_check_option == "compat":
+            # compat: record missing phonemes and exclude them from the dictionary
             self.missing_phonemes = missing_phonemes
             return
         # strict: raise error on missing phonemes
@@ -266,7 +262,9 @@ class BaseBinarizer(abc.ABC):
                 for idx in ph_idx_required.difference(ph_idx_occurred)
             }, key=lambda v: v[0] if isinstance(v, tuple) else v)
             raise RuntimeError(
-                f"The following phonemes are not covered in transcriptions: {missing_phones}"
+                f"The following phonemes are not covered in transcriptions: {missing_phones}\n"
+                "If you are fine-tuning from a pre-trained model or you don't want to support these phonemes, "
+                "consider using --coverage-check-option bypass or --coverage-check-option compat.\n"
             )
 
     def free_lazy_modules(self):
@@ -303,6 +301,10 @@ class BaseBinarizer(abc.ABC):
         total_duration = {k: 0 for k in self.spk_map}
         for samples in tqdm.tqdm(iterable, total=len(items), desc=f"Processing {prefix} items"):
             for sample in samples:
+                if not augmentation and sample.augmented:
+                    raise RuntimeError(
+                        f"Augmented samples are not allowed when `augmentation` is set to False."
+                    )
                 builder.add_item(sample.data)
                 names.append(sample.name)
                 ph_texts.append(sample.ph_text)
@@ -310,7 +312,7 @@ class BaseBinarizer(abc.ABC):
                 spk_names.append(sample.spk_name)
                 lengths.append(sample.length)
                 for k, v in sample.data.items():
-                    if isinstance(v, numpy.ndarray):
+                    if isinstance(v, numpy.ndarray) and v.ndim > 0:
                         if k not in attr_lengths:
                             attr_lengths[k] = []
                         attr_lengths[k].append(v.shape[0])
@@ -377,7 +379,7 @@ class BaseBinarizer(abc.ABC):
         self.phoneme_dictionary.dump(self.binary_data_dir / "ph_map.json", excludes=self.missing_phonemes)
         self.train_items.sort(key=lambda i: i.estimated_duration, reverse=True)
         self.process_items(self.valid_items, prefix="valid", augmentation=False, multiprocessing=False)
-        self.process_items(self.train_items, prefix="train", augmentation=True, multiprocessing=True)
+        self.process_items(self.train_items, prefix="train", augmentation=self.__augmentation__, multiprocessing=True)
 
     @dask.delayed
     def load_waveform(self, wav_fn: pathlib.Path):
@@ -555,20 +557,10 @@ class BaseBinarizer(abc.ABC):
         curve_text = label.get(curve_key)
         if curve_text is None:
             return None
-        curve = self.resample_align_curve(
+        curve = dask.delayed(resample_align_curve)(
             numpy.array(curve_text.split(), numpy.float32),
             original_timestep=float(label[timestep_key]),
             target_timestep=self.timestep,
             align_length=length
         )
         return curve
-
-    @dask.delayed
-    def resample_align_curve(
-            self, curve: numpy.ndarray,
-            original_timestep: float, target_timestep: float, align_length: int
-    ):
-        resample_aligned_curve = resample_align_curve(
-            curve, original_timestep, target_timestep, align_length
-        )
-        return resample_aligned_curve
