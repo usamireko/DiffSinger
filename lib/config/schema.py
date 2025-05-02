@@ -471,7 +471,7 @@ class DiffusionDecoderConfig(ConfigBaseModel):
     time_scale_factor: int = Field(1000, gt=0)
     sampling_algorithm: Literal["euler", "rk2", "rk4", "rk5"] = Field("euler")
     sampling_steps: int = Field(20, gt=0)
-    backbone_arch: Literal["wavenet", "lynxnet"] = Field("wavenet")
+    backbone_arch: Literal["wavenet", "lynxnet", "lynxnet2"] = Field("wavenet")
     backbone_kwargs: dict[str, Any] = Field(...)
 
 
