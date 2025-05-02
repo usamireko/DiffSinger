@@ -8,6 +8,7 @@ einops>=0.7.0
 h5py
 librosa<0.10.0
 lightning
+loguru
 matplotlib
 MonkeyType
 numpy<2.0.0

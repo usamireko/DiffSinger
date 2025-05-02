@@ -9,6 +9,7 @@ sys.path.insert(0, str(root_dir))
 import click
 import dask
 
+from lib import logging
 from lib.config.formatter import ModelFormatter
 from lib.config.io import load_raw_config
 from lib.config.schema import RootConfig, DataConfig, BinarizerConfig, ConfigurationScope
@@ -35,9 +36,13 @@ def binarize_datasets(
         binarizer_cls, data_config: DataConfig, binarizer_config: BinarizerConfig,
         coverage_check_option: str = "strict"
 ):
+    from preprocessing.binarizer_base import BaseBinarizer
+    if not issubclass(binarizer_cls, BaseBinarizer):
+        raise ValueError(f"binarizer_cls must be a subclass of {BaseBinarizer.__name__}")
+    logging.info(f"Starting binarizer: {binarizer_cls.__name__}.")
     binarizer = binarizer_cls(data_config, binarizer_config, coverage_check_option=coverage_check_option)
-    print("| Binarizer: ", binarizer.__class__)
     binarizer.process()
+    logging.success("Binarization completed.")
 
 
 @click.group(help="Binarize raw datasets.")

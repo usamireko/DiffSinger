@@ -106,8 +106,9 @@ class AcousticBinarizer(BaseBinarizer):
         length, uv, data = dask.compute(length, uv, data)
 
         if uv.all():
-            print(f"Skipped \'{item.item_name}\': empty gt f0")
-            return []
+            error = "empty gt f0"
+        else:
+            error = None
         sample = DataSample(
             name=item.item_name,
             spk_name=item.spk_name,
@@ -115,11 +116,12 @@ class AcousticBinarizer(BaseBinarizer):
             ph_text=item.ph_text,
             length=length,
             augmented=False,
-            data=data
+            data=data,
+            error=error
         )
 
         samples = [sample]
-        if not augmentation:
+        if error or not augmentation:
             return samples
 
         augmentation_params: list[tuple[float, float]] = []  # (shift, speed)

@@ -118,8 +118,9 @@ class DurationBinarizer(BaseBinarizer):
         uv, data = dask.compute(uv, data)
 
         if uv.all():
-            print(f"Skipped \'{item.item_name}\': empty gt f0")
-            return []
+            error = "empty gt f0"
+        else:
+            error = None
         sample = DataSample(
             name=item.item_name,
             spk_name=item.spk_name,
@@ -127,7 +128,8 @@ class DurationBinarizer(BaseBinarizer):
             ph_text=item.ph_text,
             length=length,
             augmented=False,
-            data=data
+            data=data,
+            error=error
         )
 
         # No augmentation supported yet

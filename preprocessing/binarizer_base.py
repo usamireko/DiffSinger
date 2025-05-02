@@ -10,6 +10,7 @@ import numpy
 import torch
 import tqdm
 
+from lib import logging
 from lib.config.schema import DataConfig, BinarizerConfig
 from lib.config.schema import DataSourceConfig
 from lib.feature import get_energy, get_tension, SinusoidalSmoothingConv1d
@@ -48,6 +49,7 @@ class DataSample:
     length: int
     augmented: bool
     data: dict[str, int | float | numpy.ndarray]
+    error: str = None
 
 
 class BaseBinarizer(abc.ABC):
@@ -179,11 +181,7 @@ class BaseBinarizer(abc.ABC):
                         self.valid_items.append(metadata_dict.pop(key))
                         hit = True
                 if not hit:
-                    # TODO: change to warning
-                    raise RuntimeError(
-                        f"Test prefix does not hit any item:\n"
-                        f"prefix '{prefix}'"
-                    )
+                    logging.warning(f"Test prefix '{prefix}' does not hit any item.")
         for item in metadata_dict.values():
             self.train_items.append(item)
 
@@ -236,7 +234,7 @@ class BaseBinarizer(abc.ABC):
         )
         filename = self.binary_data_dir / "phoneme_distribution.jpg"
         plt.savefig(fname=filename, bbox_inches="tight", pad_inches=0.25)
-        print(f"| save summary to '{filename}'")
+        logging.info(f"Phoneme distribution summary saved to '{filename}'.")
 
         missing_phonemes = set()
         missing_phonemes_display = []
@@ -285,11 +283,13 @@ class BaseBinarizer(abc.ABC):
             path=self.binary_data_dir, prefix=prefix, allowed_attr=self.__data_attrs__
         )
         if multiprocessing and self.config.num_workers > 0:
+            logging.debug(f"Processing {prefix} items with {self.config.num_workers} worker(s).")
             self.free_lazy_modules()
             iterable = chunked_multiprocess_run(
                 self.process_item, [(item, augmentation) for item in items], num_workers=self.config.num_workers
             )
         else:
+            logging.debug(f"Processing {prefix} items in main process.")
             iterable = (self.process_item(item, augmentation) for item in items)
         item_names = []
         ph_texts = []
@@ -299,28 +299,35 @@ class BaseBinarizer(abc.ABC):
         attr_lengths = {}
         total_duration_before_aug = {k: 0 for k in self.spk_map}
         total_duration = {k: 0 for k in self.spk_map}
-        for samples in tqdm.tqdm(iterable, total=len(items), desc=f"Processing {prefix} items"):
-            for sample in samples:
-                sample: DataSample
-                if not augmentation and sample.augmented:
-                    raise RuntimeError(
-                        f"Augmented samples are not allowed when `augmentation` is set to False."
-                    )
-                builder.add_item(sample.data)
-                item_names.append(sample.name)
-                ph_texts.append(sample.ph_text)
-                spk_ids.append(sample.spk_id)
-                spk_names.append(sample.spk_name)
-                lengths.append(sample.length)
-                for k, v in sample.data.items():
-                    if isinstance(v, numpy.ndarray) and v.ndim > 0:
-                        if k not in attr_lengths:
-                            attr_lengths[k] = []
-                        attr_lengths[k].append(v.shape[0])
-                duration = sample.length * self.timestep
-                if not sample.augmented:
-                    total_duration_before_aug[sample.spk_name] += duration
-                total_duration[sample.spk_name] += duration
+        with tqdm.tqdm(iterable, total=len(items), desc=f"Processing {prefix} items") as progress:
+            for samples in progress:
+                for sample in samples:
+                    sample: DataSample
+                    if sample.error:
+                        logging.warning(
+                            f"Error encountered in sample '{sample.name}': {sample.error}",
+                            callback=progress.write
+                        )
+                        continue
+                    if not augmentation and sample.augmented:
+                        raise RuntimeError(
+                            f"Augmented samples are not allowed when `augmentation` is set to False."
+                        )
+                    builder.add_item(sample.data)
+                    item_names.append(sample.name)
+                    ph_texts.append(sample.ph_text)
+                    spk_ids.append(sample.spk_id)
+                    spk_names.append(sample.spk_name)
+                    lengths.append(sample.length)
+                    for k, v in sample.data.items():
+                        if isinstance(v, numpy.ndarray) and v.ndim > 0:
+                            if k not in attr_lengths:
+                                attr_lengths[k] = []
+                            attr_lengths[k].append(v.shape[0])
+                    duration = sample.length * self.timestep
+                    if not sample.augmented:
+                        total_duration_before_aug[sample.spk_name] += duration
+                    total_duration[sample.spk_name] += duration
         builder.finalize()
         metadata = {
             "item_names": item_names,
@@ -343,31 +350,35 @@ class BaseBinarizer(abc.ABC):
         dur_before = sum(total_duration_before_aug.values())
         dur_after = sum(total_duration.values())
         if augmentation:
-            print(f"| {prefix} total duration (before augmentation): {dur_before:.2f}s")
-            print(
-                f"| {prefix} respective duration (before augmentation): "
+            logging.info(f"Total duration of {prefix} (original): {dur_before:.2f}s")
+            logging.info(
+                f"Respective duration of {prefix} (original): "
                 + ", ".join(f"{k}={v:.2f}s" for k, v in total_duration_before_aug.items() if v > 0)
             )
-            print(
-                f"| {prefix} total duration (after augmentation): "
+            logging.info(
+                f"Total duration of {prefix} (augmented): "
                 f"{dur_after:.2f}s ({dur_after / dur_before:.2f}x)"
             )
-            print(
-                f"| {prefix} respective duration (after augmentation): "
+            logging.info(
+                f"Respective duration of {prefix} (augmented): "
                 + ", ".join(f"{k}={v:.2f}s" for k, v in total_duration.items())
             )
         else:
-            print(f"| {prefix} total duration: {dur_before:.2f}s")
-            print(
-                f"| {prefix} respective duration: "
+            logging.info(f"Total duration of {prefix}: {dur_before:.2f}s")
+            logging.info(
+                f"Respective duration of {prefix}: "
                 + ", ".join(f"{k}={v:.2f}s" for k, v in total_duration_before_aug.items() if v > 0)
             )
+        logging.debug(f"Processing {prefix} items done.")
 
     def process(self):
         self.binary_data_dir.mkdir(parents=True, exist_ok=True)
         for source in self.sources:
             metadata_dict = self.load_metadata(source)
             self.split_train_and_valid_set(metadata_dict, source.test_prefixes)
+            logging.debug(f"Loaded {len(metadata_dict)} metadata items from '{source.raw_data_dir_resolved}'")
+        logging.info(f"Training set total size: {len(self.train_items)}.")
+        logging.info(f"Validation set total size: {len(self.valid_items)}.")
         if not self.train_items:
             raise RuntimeError("Training set is empty.")
         if not self.valid_items:

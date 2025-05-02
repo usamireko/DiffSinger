@@ -9,6 +9,8 @@ import sympy
 import torch
 from lightning_utilities.core.rank_zero import rank_zero_only
 
+from lib import logging
+
 
 class PeriodicModelCheckpoint(lightning.pytorch.callbacks.ModelCheckpoint):
     def __init__(
@@ -90,7 +92,7 @@ class PeriodicModelCheckpoint(lightning.pytorch.callbacks.ModelCheckpoint):
             return
         self.last_k_models.append(filepath)
         super()._save_checkpoint(trainer, filepath)
-        progress_bar_print("Saved checkpoint: " + filepath)
+        logging.info("Saved checkpoint: " + filepath, callback=progress_bar_print)
         if self.save_last_k == -1:
             return
         while len(self.last_k_models) > self.save_last_k:
@@ -106,7 +108,7 @@ class PeriodicModelCheckpoint(lightning.pytorch.callbacks.ModelCheckpoint):
             trainer.progress_bar_callback.print(s)
 
         super()._remove_checkpoint(trainer, filepath)
-        progress_bar_print("Removed checkpoint: " + filepath)
+        logging.info("Removed checkpoint: " + filepath, callback=progress_bar_print)
 
 
 class ExpressionModelCheckpoint(lightning.pytorch.callbacks.ModelCheckpoint):
@@ -167,7 +169,7 @@ class ExpressionModelCheckpoint(lightning.pytorch.callbacks.ModelCheckpoint):
             trainer.progress_bar_callback.print(s)
 
         super()._save_checkpoint(trainer, filepath)
-        progress_bar_print("Saved checkpoint: " + filepath)
+        logging.info("Saved checkpoint: " + filepath, callback=progress_bar_print)
 
     def _remove_checkpoint(
             self,
@@ -179,7 +181,7 @@ class ExpressionModelCheckpoint(lightning.pytorch.callbacks.ModelCheckpoint):
             trainer.progress_bar_callback.print(s)
 
         super()._remove_checkpoint(trainer, filepath)
-        progress_bar_print("Removed checkpoint: " + filepath)
+        logging.info("Removed checkpoint: " + filepath, callback=progress_bar_print)
 
 
 class FriendlyTQDMProgressBar(lightning.pytorch.callbacks.TQDMProgressBar):

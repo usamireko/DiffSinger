@@ -8,6 +8,7 @@ import numpy
 import scipy
 import torch
 
+from lib import logging
 from lib.config.schema import DataSourceConfig, DataConfig
 from lib.feature.pitch import interp_f0
 from lib.plot import distribution_to_figure
@@ -187,6 +188,7 @@ class VarianceBinarizer(BaseBinarizer):
         filename = self.binary_data_dir / "midi_distribution.jpg"
         plt.savefig(fname=filename, bbox_inches="tight", pad_inches=0.25)
         print(f"| save summary to \'{filename}\'")
+        logging.info(f"MIDI pitch distribution summary saved to '{filename}'.")
 
         if self.config.midi.with_glide:
             # Glide type distribution summary
@@ -288,8 +290,9 @@ class VarianceBinarizer(BaseBinarizer):
         uv, data = dask.compute(uv, data)
 
         if uv.all():
-            print(f"Skipped \'{item.item_name}\': empty gt f0")
-            return []
+            error = "empty gt f0"
+        else:
+            error = None
         sample = DataSample(
             name=item.item_name,
             spk_name=item.spk_name,
@@ -297,7 +300,8 @@ class VarianceBinarizer(BaseBinarizer):
             ph_text=item.ph_text,
             length=length,
             augmented=False,
-            data=data
+            data=data,
+            error=error
         )
 
         # No augmentation supported yet

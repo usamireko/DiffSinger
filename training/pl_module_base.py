@@ -10,6 +10,7 @@ from lightning_utilities.core.rank_zero import rank_zero_info
 from torch import nn
 from torchmetrics import Metric, MeanMetric
 
+from lib import logging
 from lib.config.schema import ModelConfig, TrainingConfig
 from lib.reflection import build_optimizer_from_config, build_lr_scheduler_from_config
 from .data import BaseDataset, DynamicBatchSampler
@@ -113,7 +114,7 @@ class BaseLightningModule(lightning.pytorch.LightningModule, abc.ABC):
                     parameter.requires_grad = False
                     frozen_count += 1
                     break
-        rank_zero_info(f"Freezing {frozen_count} parameter(s).")
+        logging.info(f"Freezing {frozen_count} parameter(s).", callback=rank_zero_info)
 
     def build_ema(self) -> ExponentialMovingAverage:
         parameters = dict(self.named_parameters())
@@ -126,7 +127,7 @@ class BaseLightningModule(lightning.pytorch.LightningModule, abc.ABC):
             parameters=parameters,
             decay=self.training_config.weight_averaging.ema_decay
         )
-        rank_zero_info(f"EMA: {ema.size()} parameter(s) registered.")
+        logging.info(f"EMA: {ema.size()} parameter(s) registered.", callback=rank_zero_info)
         return ema
 
     def load_from_pretrained_model(self, pretrained_model_path: pathlib.Path) -> None:
@@ -148,8 +149,9 @@ class BaseLightningModule(lightning.pytorch.LightningModule, abc.ABC):
             error_message=f"Pretrained model '{pretrained_model_path}' has mismatched parameter(s)"
         )
         self.load_state_dict(source_state_dict, strict=False)
-        rank_zero_info(
-            f"Loaded {len(source_state_dict)} parameter(s) from '{pretrained_model_path}'"
+        logging.info(
+            f"Loaded {len(source_state_dict)} parameter(s) from '{pretrained_model_path}'",
+            callback=rank_zero_info
         )
         if self.use_ema:
             self.ema.register()  # copy to shadow again after updating referenced parameters
@@ -163,8 +165,9 @@ class BaseLightningModule(lightning.pytorch.LightningModule, abc.ABC):
                 error_message=f"Pretrained model '{pretrained_model_path}' has mismatched EMA parameter(s)"
             )
             self.ema.load_state_dict(source_ema_state_dict, strict=False)
-            rank_zero_info(
-                f"Loaded {len(source_ema_state_dict)} EMA parameter(s) from '{pretrained_model_path}'"
+            logging.info(
+                f"Loaded {len(source_ema_state_dict)} EMA parameter(s) from '{pretrained_model_path}'",
+                callback=rank_zero_info
             )
 
     def register_loss(self, name: str, loss: nn.Module) -> None:

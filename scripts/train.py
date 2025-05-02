@@ -11,6 +11,7 @@ sys.path.insert(0, str(root_dir))
 import click
 import yaml
 
+from lib import logging
 from lib.config.formatter import ModelFormatter
 from lib.config.io import load_raw_config
 from lib.config.schema import (
@@ -71,7 +72,8 @@ def train_model(
     from training.strategy import get_strategy
 
     if not issubclass(pl_module_cls, BaseLightningModule):
-        raise ValueError("pl_module_cls must be a subclass of BaseLightningModule")
+        raise ValueError(f"pl_module_cls must be a subclass of {BaseLightningModule.__name__}")
+    logging.info(f"Lightning module: {pl_module_cls.__name__}.", callback=rank_zero_info)
 
     @rank_zero_only
     def _payload_copy(from_dir: pathlib.Path, to_dir: pathlib.Path):
@@ -97,9 +99,12 @@ def train_model(
     if resume_from is None and training_config.finetuning.pretraining_enabled:
         pl_module.load_from_pretrained_model(training_config.finetuning.pretraining_from)
     if resume_from is None:
-        rank_zero_info(f"No checkpoint found or specified to resume from. Starting new training.")
+        logging.info(
+            f"No checkpoint found or specified to resume from. Starting new training.",
+            callback=rank_zero_info
+        )
     else:
-        rank_zero_info(f"Resuming training from checkpoint: {resume_from}")
+        logging.info(f"Resuming training from checkpoint: '{resume_from}'.", callback=rank_zero_info)
 
     if training_config.trainer.unit == "step":
         val_check_interval = (
@@ -174,6 +179,7 @@ def train_model(
         use_distributed_sampler=False,
     )
     trainer.fit(model=pl_module, ckpt_path=resume_from)
+    logging.success("Training completed.", callback=rank_zero_info)
 
 
 def _get_config_scope(key: str) -> int:
