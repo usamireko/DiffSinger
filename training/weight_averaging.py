@@ -1,3 +1,5 @@
+import collections
+
 import torch
 from torch import nn
 
@@ -87,7 +89,7 @@ class ExponentialMovingAverage:
         """
         Returns the state dictionary containing the shadow parameters.
         """
-        return {name: param.clone() for name, param in self.shadow.items()}
+        return collections.OrderedDict((name, self.shadow[name].clone()) for name in sorted(self.shadow.keys()))
 
     def load_state_dict(self, state_dict: dict[str, torch.Tensor], strict: bool = True):
         """
