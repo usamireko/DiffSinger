@@ -731,6 +731,13 @@ class ValidationConfig(ConfigBaseModel):
     })
 
 
+class LoRAConfig(ConfigBaseModel):
+    include_modules: list[str] = Field(["model.*"])
+    exclude_modules: list[str] = Field([])
+    rank: int = Field(16, gt=0)
+    alpha: float = Field(16, gt=0)
+
+
 class FinetuningConfig(ConfigBaseModel):
     pretraining_enabled: bool = Field(False)
     pretraining_from: str | None = Field(None, json_schema_extra={
@@ -743,7 +750,14 @@ class FinetuningConfig(ConfigBaseModel):
     pretraining_exclude_params: list[str] = Field([])
     freezing_enabled: bool = Field(False)
     freezing_include_params: list[str] = Field([])
-    freezing_exclude_params: list[str] = Field([])
+    freezing_exclude_params: list[str] = Field(["*._lora_*"])
+    lora_enabled: bool = Field(False, json_schema_extra={
+        "dynamic_check": DynamicCheck(
+            expr=if_(this(), ref("training.finetuning.pretraining_enabled"), True),
+            message="Pretraining must be enabled to use LoRA."
+        )
+    })
+    lora_groups: list[LoRAConfig] = Field([])
 
 
 class WeightAveragingConfig(ConfigBaseModel):

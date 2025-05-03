@@ -198,7 +198,13 @@ training:
     pretraining_exclude_params: []
     freezing_enabled: false
     freezing_include_params: []
-    freezing_exclude_params: []
+    freezing_exclude_params: ["*.lora_*"]
+    lora_enabled: false
+    lora_groups:
+      - include_modules: ["model.*"]
+        exclude_modules: []
+        rank: 16
+        alpha: 16
   weight_averaging:
     ema_enabled: false
     ema_decay: 0.999

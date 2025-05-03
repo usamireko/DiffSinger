@@ -1,4 +1,5 @@
 import abc
+import collections
 import pathlib
 from fnmatch import fnmatch
 from typing import Any
@@ -13,6 +14,7 @@ from torchmetrics import Metric, MeanMetric
 from lib import logging
 from lib.config.schema import ModelConfig, TrainingConfig
 from lib.reflection import build_optimizer_from_config, build_lr_scheduler_from_config
+from modules.lora import STD_TO_LORA, create_lora
 from .data import BaseDataset, DynamicBatchSampler
 from .weight_averaging import ExponentialMovingAverage
 
@@ -26,14 +28,17 @@ class BaseLightningModule(lightning.pytorch.LightningModule, abc.ABC):
             self,
             binary_data_dir: pathlib.Path,
             model_config: ModelConfig,
-            training_config: TrainingConfig
+            training_config: TrainingConfig,
+            load_pretrained: bool = False,
     ):
         super().__init__()
 
+        # Configs
         self.binary_data_dir = binary_data_dir
         self.model_config = model_config
         self.training_config = training_config
 
+        # Modules
         self.model: nn.Module = self.build_model()
         self.losses = nn.ModuleDict()
         self.metrics = nn.ModuleDict()
@@ -43,22 +48,29 @@ class BaseLightningModule(lightning.pytorch.LightningModule, abc.ABC):
         self.register_losses_and_metrics()
         if len(self.losses) == 0:
             raise ValueError("No losses defined.")
-        self.freeze_parameters()  # caution: this can break when resuming training
-        self.print_arch()
 
+        # LoRA
+        self.use_lora = self.training_config.finetuning.lora_enabled
+        if self.use_lora:
+            self.lora_param_dict: dict[str, dict[str, Any]] = {}
+            self.create_lora()
+        # Freezing
+        self.freeze_parameters()  # caution: this can break when resuming training
+        # Weight averaging
         self.use_ema = self.training_config.weight_averaging.ema_enabled
         if self.use_ema:
             self.ema: ExponentialMovingAverage = self.build_ema()
+        # Pretrained model
         if load_pretrained and self.training_config.finetuning.pretraining_enabled:
             self.load_from_pretrained_model(training_config.finetuning.pretraining_from)
 
+        # Data loading
         self.train_dataset: BaseDataset = None
         self.valid_dataset: BaseDataset = None
         self.train_sampler: DynamicBatchSampler = None
         self.valid_sampler: DynamicBatchSampler = None
 
         self.logger_step = -1  # when accumulate_grad_batches > 1, this helps to avoid redundant logging
-
         self.post_init()
 
     @abc.abstractmethod
@@ -100,10 +112,31 @@ class BaseLightningModule(lightning.pytorch.LightningModule, abc.ABC):
         """
         pass
 
-    def print_arch(self):
-        rank_zero_info(f"Model: {self.model}")
-        rank_zero_info(f"Losses: {self.losses}")
-        rank_zero_info(f"Metrics: {self.metrics}")
+    def create_lora(self):
+        self.lora_param_dict.clear()
+        modules = {
+            k: v
+            for k, v in self.named_modules()
+            if any(isinstance(v, ty) for ty in STD_TO_LORA.keys())
+        }
+        for lora_config in self.training_config.finetuning.lora_groups:
+            filtered_modules = modules.copy()
+            _apply_include_exclude(
+                filtered_modules,
+                includes=lora_config.include_modules,
+                excludes=lora_config.exclude_modules
+            )
+            for name in filtered_modules.keys():
+                self.lora_param_dict[name] = {
+                    "rank": lora_config.rank,
+                    "alpha": lora_config.alpha,
+                }
+            # chained includes/excludes
+            modules = {k: v for k, v in modules.items() if k not in filtered_modules}
+        if len(self.lora_param_dict) == 0:
+            raise RuntimeError("No LoRA modules included.")
+        create_lora(model=self, param_dict=self.lora_param_dict)
+        logging.info(f"LoRA: {len(self.lora_param_dict)} module(s) created.", callback=rank_zero_info)
 
     def freeze_parameters(self):
         if not self.training_config.finetuning.freezing_enabled:
@@ -373,11 +406,20 @@ class BaseLightningModule(lightning.pytorch.LightningModule, abc.ABC):
         if self.use_ema:
             self.ema.restore()  # restore original parameters after validation
 
-    def on_save_checkpoint(self, checkpoint: dict[str, torch.Tensor]):
+    def on_save_checkpoint(self, checkpoint: dict[str, Any]):
+        if self.use_lora:
+            checkpoint["lora_param_dict"] = self.lora_param_dict
+            checkpoint["lora_state_dict"] = collections.OrderedDict(
+                (k, checkpoint["state_dict"].pop(k))
+                for k in list(checkpoint["state_dict"].keys())
+                if fnmatch(k, "*.lora_*")
+            )
         if self.use_ema:
             checkpoint["ema_state_dict"] = self.ema.state_dict()
 
-    def on_load_checkpoint(self, checkpoint: dict[str, torch.Tensor]):
+    def on_load_checkpoint(self, checkpoint: dict[str, Any]):
+        if self.use_lora:
+            checkpoint["state_dict"].update(checkpoint.pop("lora_state_dict"))
         if self.use_ema:
             self.ema.load_state_dict(checkpoint.pop("ema_state_dict"), strict=True)
 
