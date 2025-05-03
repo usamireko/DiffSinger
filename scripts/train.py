@@ -1,3 +1,5 @@
+import datetime
+import json
 import os
 import pathlib
 import re
@@ -76,28 +78,50 @@ def train_model(
     logging.info(f"Lightning module: {pl_module_cls.__name__}.", callback=rank_zero_info)
 
     @rank_zero_only
-    def _payload_copy(from_dir: pathlib.Path, to_dir: pathlib.Path):
-        shutil.copy(from_dir / "spk_map.json", to_dir)
-        shutil.copy(from_dir / "lang_map.json", to_dir)
-        shutil.copy(from_dir / "ph_map.json", to_dir)
+    def _check_and_copy(filename: str, from_dir: pathlib.Path, to_dir: pathlib.Path):
+        source_file = from_dir / filename
+        target_file = to_dir / filename
+        if target_file.exists():
+            with (
+                open(source_file, "r", encoding="utf8") as f1,
+                open(target_file, "r", encoding="utf8") as f2
+            ):
+                json1 = json.load(f1)
+                json2 = json.load(f2)
+            if json1 != json2:
+                raise RuntimeError(
+                    f"Contents of '{source_file}' and '{target_file}' are not identical. "
+                    f"If you edited the configuration file, please re-binarize the dataset."
+                )
+        else:
+            shutil.copy(source_file, to_dir)
 
     @rank_zero_only
     def _config_dump(cfg: RootConfig, to_dir: pathlib.Path):
+        # config for inference and exporting
         with open(to_dir / "config.yaml", "w", encoding="utf8") as f:
             yaml.safe_dump(cfg.model_dump(include={"model", "inference"}), f, allow_unicode=True, sort_keys=False)
-        with open(to_dir / "hparams.yaml", "w", encoding="utf8") as f:
+        # config for debugging, add timestamp to avoid overwriting
+        current_time = datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
+        with open(to_dir / f"hparams-{current_time}.yaml", "w", encoding="utf8") as f:
             yaml.safe_dump(cfg.model_dump(), f, allow_unicode=True, sort_keys=False)
 
     binary_data_dir = config.binarizer.binary_data_dir_resolved
     ckpt_save_dir.mkdir(parents=True, exist_ok=True)
-    _payload_copy(binary_data_dir, ckpt_save_dir)
+    _check_and_copy("spk_map.json", binary_data_dir, ckpt_save_dir)
+    _check_and_copy("lang_map.json", binary_data_dir, ckpt_save_dir)
+    _check_and_copy("ph_map.json", binary_data_dir, ckpt_save_dir)
     _config_dump(config, ckpt_save_dir)
     model_config = config.model
     training_config = config.training
 
-    pl_module = pl_module_cls(binary_data_dir, model_config, training_config)
-    if resume_from is None and training_config.finetuning.pretraining_enabled:
-        pl_module.load_from_pretrained_model(training_config.finetuning.pretraining_from)
+    pl_module: BaseLightningModule = pl_module_cls(
+        binary_data_dir=binary_data_dir,
+        model_config=model_config,
+        training_config=training_config,
+        load_pretrained=resume_from is None,
+    )
+    rank_zero_info(f"Architecture: {pl_module}")
     if resume_from is None:
         logging.info(
             f"No checkpoint found or specified to resume from. Starting new training.",

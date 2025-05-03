@@ -49,6 +49,8 @@ class BaseLightningModule(lightning.pytorch.LightningModule, abc.ABC):
         self.use_ema = self.training_config.weight_averaging.ema_enabled
         if self.use_ema:
             self.ema: ExponentialMovingAverage = self.build_ema()
+        if load_pretrained and self.training_config.finetuning.pretraining_enabled:
+            self.load_from_pretrained_model(training_config.finetuning.pretraining_from)
 
         self.train_dataset: BaseDataset = None
         self.valid_dataset: BaseDataset = None
