@@ -213,7 +213,8 @@ training:
     pretraining_include_params: ["model.*"]
     pretraining_exclude_params: []
     freezing_enabled: false
-    frozen_params: []
+    freezing_include_params: []
+    freezing_exclude_params: []
   weight_averaging:
     ema_enabled: false
     ema_decay: 0.999

@@ -742,7 +742,8 @@ class FinetuningConfig(ConfigBaseModel):
     pretraining_include_params: list[str] = Field(["model.*"])
     pretraining_exclude_params: list[str] = Field([])
     freezing_enabled: bool = Field(False)
-    frozen_params: list[str] = Field([])
+    freezing_include_params: list[str] = Field([])
+    freezing_exclude_params: list[str] = Field([])
 
 
 class WeightAveragingConfig(ConfigBaseModel):

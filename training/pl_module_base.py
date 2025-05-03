@@ -108,15 +108,20 @@ class BaseLightningModule(lightning.pytorch.LightningModule, abc.ABC):
     def freeze_parameters(self):
         if not self.training_config.finetuning.freezing_enabled:
             return
-        frozen_count = 0
-        frozen_param_patterns = self.training_config.finetuning.frozen_params
-        for name, parameter in self.named_parameters():
-            for pattern in frozen_param_patterns:
-                if fnmatch(name, pattern):
-                    parameter.requires_grad = False
-                    frozen_count += 1
-                    break
-        logging.info(f"Freezing {frozen_count} parameter(s).", callback=rank_zero_info)
+        param_dict = dict(self.named_parameters())
+        size = len(param_dict)
+        _apply_include_exclude(
+            param_dict,
+            includes=self.training_config.finetuning.freezing_include_params,
+            excludes=self.training_config.finetuning.freezing_exclude_params
+        )
+        if len(param_dict) == size:
+            raise ValueError(
+                "Freezing all parameters is not allowed."
+            )
+        for param in param_dict.values():
+            param.requires_grad = False
+        logging.info(f"Freezing {len(param_dict)} parameter(s).", callback=rank_zero_info)
 
     def build_ema(self) -> ExponentialMovingAverage:
         parameters = dict(self.named_parameters())
