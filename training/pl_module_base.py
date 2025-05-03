@@ -26,7 +26,8 @@ class BaseLightningModule(lightning.pytorch.LightningModule, abc.ABC):
             self,
             binary_data_dir: pathlib.Path,
             model_config: ModelConfig,
-            training_config: TrainingConfig
+            training_config: TrainingConfig,
+            load_pretrained: bool = False,
     ):
         super().__init__()
 
