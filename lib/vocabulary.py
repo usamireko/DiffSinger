@@ -122,16 +122,16 @@ class PhonemeDictionary:
     def is_cross_lingual(self, phone):
         return phone in self._cross_lingual_phonemes
 
-    def encode_one(self, phone, lang=None):
+    def encode_one(self, phone, lang=None) -> int | None:
         if "/" in phone:
             lang, phone = phone.split("/", maxsplit=1)
         if lang is None or phone in self._phone_to_id:
             return self._phone_to_id[phone]
         if "/" not in phone:
             phone = f"{lang}/{phone}"
-        return self._phone_to_id[phone]
+        return self._phone_to_id.get(phone)
 
-    def encode(self, sentence, lang=None):
+    def encode(self, sentence, lang=None) -> list[int | None]:
         phones = sentence.strip().split() if isinstance(sentence, str) else sentence
         return [self.encode_one(phone, lang=lang) for phone in phones]
 

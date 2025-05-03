@@ -131,23 +131,32 @@ class BaseBinarizer(abc.ABC):
         ph_text = transcription["ph_seq"].split()
         lang_seq = []
         for ph in ph_text:
-            if self.phoneme_dictionary.is_cross_lingual(ph):
-                if "/" in ph:
-                    lang_name = ph.split("/")[0]
-                    if lang_name not in self.lang_map:
-                        return False, (
-                            "Invalid language tag found in raw dataset '{}':\n"
-                            f"item '{{}}', phoneme '{ph}'"
-                        )
-                    # noinspection PyUnresolvedReferences
-                    lang_id = self.lang_map[lang_name]
-                else:
-                    # noinspection PyUnresolvedReferences
-                    lang_id = self.lang_map[data_source_config.language]
+            if "/" in ph:
+                lang_name = ph.split("/")[0]
+                if lang_name not in self.lang_map:
+                    return False, (
+                        "Invalid language tag found in raw dataset '{}':\n"
+                        f"item '{{}}', phoneme '{ph}'"
+                    )
+                full_name = ph
+            else:
+                lang_name = language
+                full_name = f"{language}/{ph}"
+            if self.phoneme_dictionary.is_cross_lingual(full_name):
+                lang_id = self.lang_map[lang_name]
             else:
                 lang_id = 0
             lang_seq.append(lang_id)
         ph_seq = self.phoneme_dictionary.encode(ph_text, lang=language)
+        unrecognized_phs = set()
+        for ph, token in zip(ph_text, ph_seq):
+            if token is None:
+                unrecognized_phs.add(ph)
+        if unrecognized_phs:
+            return False, (
+                "Unrecognized phonemes found in raw dataset '{}':\n"
+                f"item '{{}}', phonemes {sorted(unrecognized_phs)}"
+            )
         ph_dur = []
         for dur in transcription["ph_dur"].split():
             dur_float = float(dur)
