@@ -387,7 +387,7 @@ def _apply_include_exclude(dict_to_filter: dict[str, Any], includes: list[str] =
     for key in list(dict_to_filter.keys()):
         if includes and not any(fnmatch(key, pattern) for pattern in includes):
             del dict_to_filter[key]
-        elif any(fnmatch(key, pattern) for pattern in excludes):
+        elif excludes and any(fnmatch(key, pattern) for pattern in excludes):
             del dict_to_filter[key]
 
 
