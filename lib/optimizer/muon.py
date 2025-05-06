@@ -94,7 +94,8 @@ class Muon(torch.optim.Optimizer):
                     self.state[p]["momentum_buffer"] = buf[i].clone()
 
 
-def muon_param_filter(module: nn.Module, param: nn.Parameter) -> bool:
+# noinspection PyUnusedLocal
+def muon_param_filter(*, module: nn.Module, param: nn.Parameter, **kwargs) -> bool:
     """
     Filter function to determine if a parameter should be optimized by Muon.
     Args:

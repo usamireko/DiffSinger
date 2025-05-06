@@ -1,4 +1,6 @@
 from dataclasses import dataclass
+from fnmatch import fnmatch
+from functools import partial
 from typing import Any, Dict, List, Type, Callable, Optional, Union
 
 import torch
@@ -30,15 +32,41 @@ class OptimizerSpec:
 
     class_type: Type[torch.optim.Optimizer]
     init_args: Dict[str, Any] = None
-    param_filter: Optional[Callable[[torch.nn.Module, torch.Tensor], bool]] = None
+    param_filter: Optional[Callable[..., bool]] = None
+
+
+# noinspection PyUnusedLocal
+def _default_includes_excludes(
+        *,
+        name: str, includes: list[str] = None, excludes: list[str] = None,
+        **kwargs
+) -> bool:
+    """
+    An includes/excludes-only filter function for the chained optimizer.
+    """
+    return (
+            (not includes or any(fnmatch(name, p) for p in includes)) and
+            (not excludes or not any(fnmatch(name, p) for p in excludes))
+    )
 
 
 def _parse_plain_spec(spec: OptimizerPlainSpec) -> OptimizerSpec:
-
     class_type = get_object_by_module_path(spec.cls)
     init_args = spec.kwargs or {}
     if spec.filter is not None:
-        param_filter = get_object_by_module_path(spec.filter)
+        if isinstance(spec.filter, str):
+            param_filter = get_object_by_module_path(spec.filter)
+        elif isinstance(spec.filter, dict):
+            param_filter = partial(
+                _default_includes_excludes,
+                includes=spec.filter.get("includes"),
+                excludes=spec.filter.get("excludes"),
+            )
+        else:
+            raise ValueError(
+                f"Invalid filter format: {spec.filter}. Expected either a string referring to a filter function, "
+                f"or a dict containing 'includes' and 'excludes' keys."
+            )
     else:
         param_filter = None
     return OptimizerSpec(
@@ -66,11 +94,14 @@ class ChainedOptimizer(torch.optim.Optimizer):
             **common_kwargs,
     ):
         self.parameter_link_to_module: Dict[int, torch.nn.Module] = {}
+        self.parameter_link_to_name: Dict[int, str] = {}
         if isinstance(module_or_params, torch.nn.Module):
             params = module_or_params.parameters()
             for module in module_or_params.modules():
                 for param in module.parameters(recurse=False):
                     self.parameter_link_to_module[id(param)] = module
+            for name, param in module_or_params.named_parameters(recurse=True):
+                self.parameter_link_to_name[id(param)] = name
         else:
             params = module_or_params
         optimizer_specs = []
@@ -104,7 +135,11 @@ class ChainedOptimizer(torch.optim.Optimizer):
             for param in params:
                 assert isinstance(param, torch.Tensor), f"Expected a torch.Tensor, got {type(param)}"
                 for index, spec in enumerate(optimizer_specs):
-                    if spec.param_filter is None or spec.param_filter(self.parameter_link_to_module.get(id(param)), param):
+                    if spec.param_filter is None or spec.param_filter(
+                            module=self.parameter_link_to_module.get(id(param)),
+                            param=param,
+                            name=self.parameter_link_to_name.get(id(param)),
+                    ):
                         params_for_optimizers[index].append(param)
                         indices.add((index, 0))
                         break
@@ -163,7 +198,11 @@ class ChainedOptimizer(torch.optim.Optimizer):
             assert isinstance(param, torch.Tensor), f"Expected a torch.Tensor, got {type(param)}"
             found_optimizer = False
             for index, spec in enumerate(self.optimizer_specs):
-                if spec.param_filter is None or spec.param_filter(self.parameter_link_to_module.get(param), param):
+                if spec.param_filter is None or spec.param_filter(
+                        module=self.parameter_link_to_module.get(id(param)),
+                        param=param,
+                        name=self.parameter_link_to_name.get(id(param)),
+                ):
                     params_for_optimizers[index].append(param)
                     indices.add((index, len(self.optimizers[index].param_groups)))
                     found_optimizer = True
