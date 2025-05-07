@@ -259,7 +259,7 @@ class BaseLightningModule(lightning.pytorch.LightningModule, abc.ABC):
         )
 
     def configure_optimizers(self):
-        optimizer = build_optimizer_from_config(self.model, self.training_config.optimizer)
+        optimizer = build_optimizer_from_config(self, self.training_config.optimizer)
         scheduler = build_lr_scheduler_from_config(optimizer, self.training_config.lr_scheduler)
         interval = self.training_config.lr_scheduler.unit
         if isinstance(scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
