@@ -12,7 +12,40 @@ from lightning_utilities.core.rank_zero import rank_zero_only
 from lib import logging
 
 
-class PeriodicModelCheckpoint(lightning.pytorch.callbacks.ModelCheckpoint):
+class FriendlyModelCheckpoint(lightning.pytorch.callbacks.ModelCheckpoint):
+    def state_dict(self) -> dict[str, Any]:
+        state_dict = super().state_dict()
+        # Lightning stores dirpath as an absolute path with platform-specific
+        # separators. This is not portable across machines, so we remove it.
+        state_dict.pop("dirpath", None)
+        return state_dict
+
+    def _save_checkpoint(
+            self,
+            trainer: lightning.pytorch.Trainer,
+            filepath: str
+    ) -> None:
+        @rank_zero_only
+        def progress_bar_print(s):
+            trainer.progress_bar_callback.print(s)
+
+        super()._save_checkpoint(trainer, filepath)
+        logging.info("Saved checkpoint: " + filepath, callback=progress_bar_print)
+
+    def _remove_checkpoint(
+            self,
+            trainer: lightning.pytorch.Trainer,
+            filepath: str
+    ) -> None:
+        @rank_zero_only
+        def progress_bar_print(s):
+            trainer.progress_bar_callback.print(s)
+
+        super()._remove_checkpoint(trainer, filepath)
+        logging.info("Removed checkpoint: " + filepath, callback=progress_bar_print)
+
+
+class PeriodicModelCheckpoint(FriendlyModelCheckpoint):
     def __init__(
             self,
             dirpath: str,
@@ -84,34 +117,17 @@ class PeriodicModelCheckpoint(lightning.pytorch.callbacks.ModelCheckpoint):
             trainer: lightning.pytorch.Trainer,
             filepath: str
     ) -> None:
-        @rank_zero_only
-        def progress_bar_print(s):
-            trainer.progress_bar_callback.print(s)
-
         if self.save_last_k == 0:
             return
         self.last_k_models.append(filepath)
         super()._save_checkpoint(trainer, filepath)
-        logging.info("Saved checkpoint: " + filepath, callback=progress_bar_print)
         if self.save_last_k == -1:
             return
         while len(self.last_k_models) > self.save_last_k:
             self._remove_checkpoint(trainer, self.last_k_models.popleft())
 
-    def _remove_checkpoint(
-            self,
-            trainer: lightning.pytorch.Trainer,
-            filepath: str
-    ) -> None:
-        @rank_zero_only
-        def progress_bar_print(s):
-            trainer.progress_bar_callback.print(s)
 
-        super()._remove_checkpoint(trainer, filepath)
-        logging.info("Removed checkpoint: " + filepath, callback=progress_bar_print)
-
-
-class ExpressionModelCheckpoint(lightning.pytorch.callbacks.ModelCheckpoint):
+class ExpressionModelCheckpoint(FriendlyModelCheckpoint):
     def __init__(
             self,
             dirpath: str,
@@ -158,30 +174,6 @@ class ExpressionModelCheckpoint(lightning.pytorch.callbacks.ModelCheckpoint):
         eval_result = torch.tensor(float(eval_result), dtype=torch.float32)
         monitor_candidates[self.metric_key] = eval_result
         super()._save_topk_checkpoint(trainer, monitor_candidates)
-
-    def _save_checkpoint(
-            self,
-            trainer: lightning.pytorch.Trainer,
-            filepath: str
-    ) -> None:
-        @rank_zero_only
-        def progress_bar_print(s):
-            trainer.progress_bar_callback.print(s)
-
-        super()._save_checkpoint(trainer, filepath)
-        logging.info("Saved checkpoint: " + filepath, callback=progress_bar_print)
-
-    def _remove_checkpoint(
-            self,
-            trainer: lightning.pytorch.Trainer,
-            filepath: str
-    ) -> None:
-        @rank_zero_only
-        def progress_bar_print(s):
-            trainer.progress_bar_callback.print(s)
-
-        super()._remove_checkpoint(trainer, filepath)
-        logging.info("Removed checkpoint: " + filepath, callback=progress_bar_print)
 
 
 class FriendlyTQDMProgressBar(lightning.pytorch.callbacks.TQDMProgressBar):
