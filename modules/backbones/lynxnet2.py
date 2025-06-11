@@ -90,7 +90,7 @@ class LYNXNet2(nn.Module):
         else:
             x = spec.flatten(start_dim=1, end_dim=2)  # [B, F x M, T]
 
-        x = self.input_projection(x.transpose(1, 2)) # [B, T, F x M]
+        x = self.input_projection(x.transpose(1, 2).float()) # [B, T, F x M]
         if self.use_conditioner_cache:
             # It may need to be modified at some point to be compatible with the condition cache
             x = x + self.conditioner_projection(cond).transpose(1, 2)
