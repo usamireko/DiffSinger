@@ -294,22 +294,21 @@ class DiffSingerVariance(CategorizedModule, ParameterAdaptorModule):
                 else:
                     delta_pitch_in = (pitch - base_pitch) * ~pitch_retake
                 if self.use_variance_scaling:
-                    pitch_cond += self.delta_pitch_embed((delta_pitch_in[:, :, None].float()) / 12.0)
-
+                    pitch_cond += self.delta_pitch_embed((delta_pitch_in[:, :, None] / 12).float())
                 else:
-                    pitch_cond += self.delta_pitch_embed(delta_pitch_in[:, :, None])
+                    pitch_cond += self.delta_pitch_embed((delta_pitch_in[:, :, None]).float())
             else:
                 if not retake_unset:  # retake
                     base_pitch = base_pitch * pitch_retake + pitch * ~pitch_retake
                 if self.use_variance_scaling:
-                    pitch_cond += self.base_pitch_embed(base_pitch[:, :, None] / 128)
+                    pitch_cond += self.base_pitch_embed((base_pitch[:, :, None] / 128).float())
                 else:
-                    pitch_cond += self.base_pitch_embed(base_pitch[:, :, None])
+                    pitch_cond += self.base_pitch_embed((base_pitch[:, :, None]).float())
 
             if infer:
                 pitch_pred_out = self.pitch_predictor(pitch_cond, infer=True)
             else:
-                pitch_pred_out = self.pitch_predictor(pitch_cond, pitch - base_pitch, infer=False)
+                pitch_pred_out = self.pitch_predictor(pitch_cond, (pitch - base_pitch).float(), infer=False)
         else:
             pitch_pred_out = None
 
