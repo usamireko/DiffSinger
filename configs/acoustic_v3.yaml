@@ -73,7 +73,7 @@ binarizer:
 model:
   use_spk_id: true
   num_spk: 2
-  hidden_size: 256
+  condition_dim: 256
   linguistic_encoder:
     use_lang_id: true
     num_lang: 3
