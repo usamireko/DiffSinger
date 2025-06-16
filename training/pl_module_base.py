@@ -4,6 +4,7 @@ from fnmatch import fnmatch
 from typing import Any
 
 import lightning.pytorch
+import matplotlib
 import torch
 import tqdm
 from lightning_utilities.core.rank_zero import rank_zero_info
@@ -19,6 +20,7 @@ from .weight_averaging import ExponentialMovingAverage
 __all__ = [
     "BaseLightningModule",
 ]
+matplotlib.use("Agg")  # fix Tcl_AsyncDelete: async handler deleted by the wrong thread
 
 
 class BaseLightningModule(lightning.pytorch.LightningModule, abc.ABC):
