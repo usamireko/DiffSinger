@@ -281,49 +281,53 @@ def main():
 
 
 def shared_options(func):
-    func = click.option(
-        "--config", type=click.Path(
-            exists=True, dir_okay=False, file_okay=True, readable=True, path_type=pathlib.Path
+    options = [
+        click.option(
+            "--config", type=click.Path(
+                exists=True, dir_okay=False, file_okay=True, readable=True, path_type=pathlib.Path
+            ),
+            required=True,
+            help="Path to the configuration file."
         ),
-        required=True,
-        help="Path to the configuration file."
-    )(func)
-    func = click.option(
-        "--override", multiple=True,
-        type=click.STRING, required=False,
-        help="Override configuration values in dotlist format."
-    )(func)
-    func = click.option(
-        "--work-dir", type=click.Path(
-            dir_okay=True, file_okay=False, path_type=pathlib.Path
+        click.option(
+            "--override", multiple=True,
+            type=click.STRING, required=False,
+            help="Override configuration values in dotlist format."
         ),
-        required=False, default=pathlib.Path(__file__).parent.parent / "experiments",
-        show_default=True,
-        help="Path to the working directory. The experiment subdirectory will be created here."
-    )(func)
-    func = click.option(
-        "--exp-name", type=click.STRING,
-        required=True,
-        help="Experiment name. Checkpoints will be saved in subdirectory with this name."
-    )(func)
-    func = click.option(
-        "--log-dir", type=click.Path(
-            dir_okay=True, file_okay=False, path_type=pathlib.Path
+        click.option(
+            "--work-dir", type=click.Path(
+                dir_okay=True, file_okay=False, path_type=pathlib.Path
+            ),
+            required=False, default=pathlib.Path(__file__).parent.parent / "experiments",
+            show_default=True,
+            help="Path to the working directory. The experiment subdirectory will be created here."
         ),
-        required=False,
-        help="Directory to save logs. If not specified, logs will be saved in the checkpoints directory."
-    )(func)
-    func = click.option(
-        "--restart", is_flag=True, default=False,
-        help="Ignore existing checkpoints and start new training."
-    )(func)
-    func = click.option(
-        "--resume-from", type=click.Path(
-            exists=True, dir_okay=False, file_okay=True, readable=True, path_type=pathlib.Path
+        click.option(
+            "--exp-name", type=click.STRING,
+            required=True,
+            help="Experiment name. Checkpoints will be saved in subdirectory with this name."
         ),
-        required=False,
-        help="Resume training from this specific checkpoint."
-    )(func)
+        click.option(
+            "--log-dir", type=click.Path(
+                dir_okay=True, file_okay=False, path_type=pathlib.Path
+            ),
+            required=False,
+            help="Directory to save logs. If not specified, logs will be saved in the checkpoints directory."
+        ),
+        click.option(
+            "--restart", is_flag=True, default=False,
+            help="Ignore existing checkpoints and start new training."
+        ),
+        click.option(
+            "--resume-from", type=click.Path(
+                exists=True, dir_okay=False, file_okay=True, readable=True, path_type=pathlib.Path
+            ),
+            required=False,
+            help="Resume training from this specific checkpoint."
+        ),
+    ]
+    for option in options[::-1]:
+        func = option(func)
     return func
 
 

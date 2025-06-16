@@ -51,23 +51,30 @@ def main():
 
 
 def shared_options(func):
-    func = click.option(
-        "--config", type=click.Path(
-            exists=True, dir_okay=False, file_okay=True, readable=True, path_type=pathlib.Path
+    options = [
+        click.option(
+            "--config", type=click.Path(
+                exists=True, dir_okay=False, file_okay=True, readable=True, path_type=pathlib.Path
+            ),
+            required=True,
+            help="Path to the configuration file."
         ),
-        required=True,
-        help="Path to the configuration file."
-    )(func)
-    func = click.option(
-        "--override", multiple=True,
-        type=click.STRING, required=False,
-        help="Override configuration values in dotlist format."
-    )(func)
-    func = click.option(
-        "--coverage-check-option",
-        type=click.Choice(["strict", "bypass", "compat"], case_sensitive=False),
-        default="strict", required=False
-    )(func)
+        click.option(
+            "--override", multiple=True,
+            type=click.STRING, required=False,
+            help="Override configuration values in dotlist format."
+        ),
+        click.option(
+            "--coverage-check-option",
+            type=click.Choice(["strict", "bypass", "compat"], case_sensitive=False),
+            default="strict", required=False,
+            help="Option for handling with phoneme coverage check. "
+                 "strict: raise an error on failure; bypass: skip the check; "
+                 "compat: remove uncovered phonemes from the vocabulary."
+        ),
+    ]
+    for option in options[::-1]:
+        func = option(func)
     return func
 
 
@@ -75,9 +82,9 @@ def shared_options(func):
 @shared_options
 def _binarize_acoustic_datasets_cli(config: pathlib.Path, override: list[str], coverage_check_option: str):
     config = _load_and_log_config(config, scope=ConfigurationScope.ACOUSTIC, overrides=override)
-    from preprocessing.acoustic_binarizer import AcousticBinarizer
+    from preprocessing.ssl_tension_binarizer import SSLTensionBinarizer
     binarize_datasets(
-        AcousticBinarizer, config.data, config.binarizer,
+        SSLTensionBinarizer, config.data, config.binarizer,
         coverage_check_option=coverage_check_option
     )
 
