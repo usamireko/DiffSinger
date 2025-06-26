@@ -117,7 +117,7 @@ class VarianceBinarizer(BaseBinarizer):
                     )
                 note_glide = transcription.get("note_glide")
                 if note_glide is None:
-                    note_glide = [0] * len(note_glide)
+                    note_glide = [0] * len(note_midi)
                 else:
                     note_glide = [self.glide_map[g] for g in note_glide.split()]
                     if len(note_glide) != len(note_midi):
