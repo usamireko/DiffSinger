@@ -318,15 +318,15 @@ class DiffSingerVariance(CategorizedModule, ParameterAdaptorModule):
         if pitch is None:
             pitch = base_pitch + pitch_pred_out
         if self.use_variance_scaling:
-            var_cond = condition + self.pitch_embed(pitch[:, :, None] / 12)
+            var_cond = condition + self.pitch_embed((pitch[:, :, None] / 12).float())
         else:
-            var_cond = condition + self.pitch_embed(pitch[:, :, None])
+            var_cond = condition + self.pitch_embed(pitch[:, :, None].float())
 
         variance_inputs = self.collect_variance_inputs(**kwargs)
 
         if variance_retake is not None:
             variance_embeds = [
-                self.variance_embeds[v_name](v_input[:, :, None]) * ~variance_retake[v_name][:, :, None] * self.variance_retake_scaling[v_name]
+                self.variance_embeds[v_name](v_input[:, :, None].float()) * ~variance_retake[v_name][:, :, None] * self.variance_retake_scaling[v_name]
                 for v_name, v_input in zip(self.variance_prediction_list, variance_inputs)
             ]
             var_cond += torch.stack(variance_embeds, dim=-1).sum(-1)
