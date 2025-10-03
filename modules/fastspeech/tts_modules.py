@@ -354,7 +354,7 @@ class StretchRegulator(torch.nn.Module):
         stretch_delta = 1 - bound_mask * mel2dur
         stretch_delta = F.pad(stretch_delta, [1, -1], mode='constant', value=0)
         stretch_denorm = torch.cumsum(stretch_delta, dim=1)
-        stretch = stretch_denorm / mel2dur
+        stretch = stretch_denorm.float() / mel2dur
         return stretch * (mel2ph > 0)
 
 

@@ -5,8 +5,9 @@ from torch.nn import functional as F
 from modules.commons.common_layers import (
     NormalInitEmbedding as Embedding,
     XavierUniformInitLinear as Linear,
+    SinusoidalPosEmb,
 )
-from modules.fastspeech.tts_modules import FastSpeech2Encoder, mel2ph_to_dur
+from modules.fastspeech.tts_modules import FastSpeech2Encoder, mel2ph_to_dur, StretchRegulator
 from utils.hparams import hparams
 from utils.phoneme_utils import PAD_INDEX
 
@@ -18,6 +19,18 @@ class FastSpeech2Acoustic(nn.Module):
         self.use_lang_id = hparams.get('use_lang_id', False)
         if self.use_lang_id:
             self.lang_embed = Embedding(hparams['num_lang'] + 1, hparams['hidden_size'], padding_idx=0)
+
+        self.use_stretch_embed = hparams.get('use_stretch_embed', False)
+        if self.use_stretch_embed:
+            self.sr = StretchRegulator()
+            self.stretch_embed = nn.Sequential(
+                SinusoidalPosEmb(hparams['hidden_size']),
+                nn.Linear(hparams['hidden_size'], hparams['hidden_size'] * 4),
+                nn.GELU(),
+                nn.Linear(hparams['hidden_size'] * 4, hparams['hidden_size']),
+            )
+            self.stretch_embed_rnn = nn.GRU(hparams['hidden_size'], hparams['hidden_size'], 1, batch_first=True)
+
         self.dur_embed = Linear(1, hparams['hidden_size'])
         self.encoder = FastSpeech2Encoder(
             hidden_size=hparams['hidden_size'], num_layers=hparams['enc_layers'],
@@ -84,20 +97,17 @@ class FastSpeech2Acoustic(nn.Module):
     def forward_variance_embedding(self, condition, key_shift=None, speed=None, **variances):
         if self.use_variance_embeds:
             variance_embeds = torch.stack([
-                self.variance_embeds[v_name](variances[v_name][:, :, None]) 
-                * self.variance_scaling_factor[v_name]
+                self.variance_embeds[v_name](variances[v_name][:, :, None] * self.variance_scaling_factor[v_name])
                 for v_name in self.variance_embed_list
             ], dim=-1).sum(-1)
             condition += variance_embeds
 
         if self.use_key_shift_embed:
-            key_shift_embed = self.key_shift_embed(key_shift[:, :, None])
-            key_shift_embed *= self.variance_scaling_factor['key_shift']
+            key_shift_embed = self.key_shift_embed(key_shift[:, :, None] * self.variance_scaling_factor['key_shift'])
             condition += key_shift_embed
 
         if self.use_speed_embed:
-            speed_embed = self.speed_embed(speed[:, :, None])
-            speed_embed *= self.variance_scaling_factor['speed']
+            speed_embed = self.speed_embed(speed[:, :, None] * self.variance_scaling_factor['speed'])
             condition += speed_embed
 
         return condition
@@ -124,6 +134,14 @@ class FastSpeech2Acoustic(nn.Module):
         encoder_out = F.pad(encoder_out, [0, 0, 1, 0])
         mel2ph_ = mel2ph[..., None].repeat([1, 1, encoder_out.shape[-1]])
         condition = torch.gather(encoder_out, 1, mel2ph_)
+
+        if self.use_stretch_embed:
+            stretch = self.sr(mel2ph, dur)
+            stretch_embed = self.stretch_embed(stretch * 1000)
+            condition += stretch_embed
+            self.stretch_embed_rnn.flatten_parameters()
+            stretch_embed_rnn_out, _ =self.stretch_embed_rnn(condition)
+            condition += stretch_embed_rnn_out
 
         if self.use_spk_id:
             spk_mix_embed = kwargs.get('spk_mix_embed')
