@@ -82,9 +82,9 @@ def shared_options(func):
 @shared_options
 def _binarize_acoustic_datasets_cli(config: pathlib.Path, override: list[str], coverage_check_option: str):
     config = _load_and_log_config(config, scope=ConfigurationScope.ACOUSTIC, overrides=override)
-    from preprocessing.ssl_tension_binarizer import SSLTensionBinarizer
+    from preprocessing.acoustic_binarizer import AcousticBinarizer
     binarize_datasets(
-        SSLTensionBinarizer, config.data, config.binarizer,
+        AcousticBinarizer, config.data, config.binarizer,
         coverage_check_option=coverage_check_option
     )
 
