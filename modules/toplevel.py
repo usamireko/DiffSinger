@@ -134,7 +134,8 @@ class DiffSingerVariance(CategorizedModule, ParameterAdaptorModule):
         self.predict_dur = hparams['predict_dur']
         self.predict_pitch = hparams['predict_pitch']
 
-        self.use_stretch_embed = hparams.get('use_stretch_embed', False)
+        self.use_stretch_embed = hparams.get('use_stretch_embed', None)
+        assert self.use_stretch_embed is not None, "You may be loading an old version of the model checkpoint, which is incompatible with the new version due to some bug fixes. It is recommended to roll back to the old version (commit id: 6df0ee977c3728f14cb79c2db8b19df30b23a0bf)"
         if self.use_stretch_embed and (self.predict_pitch or self.predict_variances):
             self.sr = StretchRegulator()
             self.stretch_embed = nn.Sequential(
