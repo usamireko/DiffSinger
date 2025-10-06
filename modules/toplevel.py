@@ -10,7 +10,8 @@ from basics.base_module import CategorizedModule
 from modules.aux_decoder import AuxDecoderAdaptor
 from modules.commons.common_layers import (
     XavierUniformInitLinear as Linear,
-    NormalInitEmbedding as Embedding
+    NormalInitEmbedding as Embedding,
+    SinusoidalPosEmb
 )
 from modules.core import (
     GaussianDiffusion, PitchDiffusion, MultiVarianceDiffusion,
@@ -18,7 +19,7 @@ from modules.core import (
 )
 from modules.fastspeech.acoustic_encoder import FastSpeech2Acoustic
 from modules.fastspeech.param_adaptor import ParameterAdaptorModule
-from modules.fastspeech.tts_modules import RhythmRegulator, LengthRegulator
+from modules.fastspeech.tts_modules import RhythmRegulator, LengthRegulator, StretchRegulator
 from modules.fastspeech.variance_encoder import FastSpeech2Variance, MelodyEncoder
 from utils.hparams import hparams
 
@@ -132,6 +133,17 @@ class DiffSingerVariance(CategorizedModule, ParameterAdaptorModule):
         ParameterAdaptorModule.__init__(self)
         self.predict_dur = hparams['predict_dur']
         self.predict_pitch = hparams['predict_pitch']
+
+        self.use_stretch_embed = hparams.get('use_stretch_embed', False)
+        if self.use_stretch_embed and (self.predict_pitch or self.predict_variances):
+            self.sr = StretchRegulator()
+            self.stretch_embed = nn.Sequential(
+                SinusoidalPosEmb(hparams['hidden_size']),
+                nn.Linear(hparams['hidden_size'], hparams['hidden_size'] * 4),
+                nn.GELU(),
+                nn.Linear(hparams['hidden_size'] * 4, hparams['hidden_size']),
+            )
+            self.stretch_embed_rnn = nn.GRU(hparams['hidden_size'], hparams['hidden_size'], 1, batch_first=True)
 
         self.use_spk_id = hparams['use_spk_id']
         if self.use_spk_id:
@@ -255,6 +267,14 @@ class DiffSingerVariance(CategorizedModule, ParameterAdaptorModule):
         mel2ph_ = mel2ph[..., None].repeat([1, 1, hparams['hidden_size']])
         condition = torch.gather(encoder_out, 1, mel2ph_)
 
+        if self.use_stretch_embed:
+            stretch = self.sr(mel2ph, ph_dur)
+            stretch_embed = self.stretch_embed(stretch * 1000)
+            condition += stretch_embed
+            self.stretch_embed_rnn.flatten_parameters()
+            stretch_embed_rnn_out, _ = self.stretch_embed_rnn(condition)
+            condition = condition + stretch_embed_rnn_out
+            
         if self.use_spk_id:
             condition += spk_embed
 
