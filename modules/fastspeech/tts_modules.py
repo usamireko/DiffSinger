@@ -347,7 +347,7 @@ class StretchRegulator(torch.nn.Module):
         """
         if dur is None:
             dur = mel2ph_to_dur(mel2ph, mel2ph.max())
-        dur = torch.cat([dur[:, :1] + 1, dur], dim=1)  # Avoid dividing by zero
+        dur = torch.cat([torch.ones_like(dur[:, :1]), dur], dim=1)  # Avoid dividing by zero
         mel2dur = torch.gather(dur, 1, mel2ph)
         bound_mask = torch.gt(mel2ph[:, 1:], mel2ph[:, :-1])
         stretch_delta = 1 - bound_mask * mel2dur[:, :-1]
