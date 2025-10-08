@@ -120,11 +120,11 @@ class FastSpeech2Acoustic(nn.Module):
             **kwargs
     ):
         txt_embed = self.txt_embed(txt_tokens)
-        dur = mel2ph_to_dur(mel2ph, txt_tokens.shape[1]).float()
+        dur = mel2ph_to_dur(mel2ph, txt_tokens.shape[1])
         if self.use_variance_scaling:
-            dur_embed = self.dur_embed(torch.log(1 + dur[:, :, None]))
+            dur_embed = self.dur_embed(torch.log(1 + dur[:, :, None].float()))
         else:
-            dur_embed = self.dur_embed(dur[:, :, None])
+            dur_embed = self.dur_embed(dur[:, :, None].float())
         if self.use_lang_id:
             lang_embed = self.lang_embed(languages)
             extra_embed = dur_embed + lang_embed
@@ -137,12 +137,17 @@ class FastSpeech2Acoustic(nn.Module):
         condition = torch.gather(encoder_out, 1, mel2ph_)
 
         if self.use_stretch_embed:
-            stretch = self.sr(mel2ph, dur)
-            stretch_embed = self.stretch_embed(stretch * 1000)
+            stretch = torch.round(1000 * self.sr(mel2ph, dur))
+            if self.training and stretch.numel() > 1000:
+                # construct a phoneme stretching index lookup table with a total of 1001 indexes (0~1000)
+                table = self.stretch_embed(torch.arange(0, 1001, device=stretch.device))
+                stretch_embed = torch.index_select(table, 0, stretch.view(-1).long()).view_as(condition)
+            else:
+                stretch_embed = self.stretch_embed(stretch)
             condition += stretch_embed
             self.stretch_embed_rnn.flatten_parameters()
-            stretch_embed_rnn_out, _ =self.stretch_embed_rnn(condition)
-            condition += stretch_embed_rnn_out
+            stretch_embed_rnn_out, _ = self.stretch_embed_rnn(condition)
+            condition = condition + stretch_embed_rnn_out
 
         if self.use_spk_id:
             spk_mix_embed = kwargs.get('spk_mix_embed')

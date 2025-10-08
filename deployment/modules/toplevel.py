@@ -221,10 +221,11 @@ class DiffSingerVarianceONNX(DiffSingerVariance):
             x_src = F.pad(x_src, [1, 0])
         x_cond = torch.gather(x_src, 1, mel2x)
         if self.use_stretch_embed and check_stretch_embed:
-            stretch = self.sr(_mel2x, x_dur)
-            stretch_embed = self.stretch_embed(stretch * 1000)
+            stretch = torch.round(1000 * self.sr(_mel2x, x_dur))
+            table = self.stretch_embed(torch.arange(0, 1001, device=stretch.device))
+            stretch_embed = torch.index_select(table, 0, stretch.view(-1).long()).view_as(x_cond)
             x_cond += stretch_embed
-            stretch_embed_rnn_out, _ =self.stretch_embed_rnn(x_cond)
+            stretch_embed_rnn_out, _ = self.stretch_embed_rnn(x_cond)
             x_cond += stretch_embed_rnn_out
         return x_cond
 

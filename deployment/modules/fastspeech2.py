@@ -94,10 +94,11 @@ class FastSpeech2AcousticONNX(FastSpeech2Acoustic):
         condition = torch.gather(encoded, 1, mel2ph)
 
         if self.use_stretch_embed:
-            stretch = self.sr(_mel2ph, durations)
-            stretch_embed = self.stretch_embed(stretch * 1000)
+            stretch = torch.round(1000 * self.sr(_mel2ph, durations))
+            table = self.stretch_embed(torch.arange(0, 1001, device=stretch.device))
+            stretch_embed = torch.index_select(table, 0, stretch.view(-1).long()).view_as(condition)
             condition += stretch_embed
-            stretch_embed_rnn_out, _ =self.stretch_embed_rnn(condition)
+            stretch_embed_rnn_out, _ = self.stretch_embed_rnn(condition)
             condition += stretch_embed_rnn_out
 
         if self.f0_embed_type == 'discrete':

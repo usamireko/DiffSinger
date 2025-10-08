@@ -269,8 +269,13 @@ class DiffSingerVariance(CategorizedModule, ParameterAdaptorModule):
         condition = torch.gather(encoder_out, 1, mel2ph_)
 
         if self.use_stretch_embed:
-            stretch = self.sr(mel2ph, ph_dur)
-            stretch_embed = self.stretch_embed(stretch * 1000)
+            stretch = torch.round(1000 * self.sr(mel2ph, ph_dur))
+            if self.training and stretch.numel() > 1000:
+                # construct a phoneme stretching index lookup table with a total of 1001 indexes (0~1000)
+                table = self.stretch_embed(torch.arange(0, 1001, device=stretch.device))
+                stretch_embed = torch.index_select(table, 0, stretch.view(-1).long()).view_as(condition)
+            else:
+                stretch_embed = self.stretch_embed(stretch)
             condition += stretch_embed
             self.stretch_embed_rnn.flatten_parameters()
             stretch_embed_rnn_out, _ = self.stretch_embed_rnn(condition)
