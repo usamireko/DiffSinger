@@ -41,10 +41,10 @@ class FastSpeech2Variance(nn.Module):
             self.midi_embed = Embedding(128, hparams['hidden_size'])
             self.dur_predictor = DurationPredictor(
                 in_dims=hparams['hidden_size'],
-                n_chans=dur_hparams['hidden_size'],
-                n_layers=dur_hparams['num_layers'],
-                dropout_rate=dur_hparams['dropout'],
-                kernel_size=dur_hparams['kernel_size'],
+                n_chans=dur_hparams.get('hidden_size', hparams['hidden_size']),
+                n_layers=dur_hparams.get('num_layers', None),
+                dropout_rate=dur_hparams.get('dropout', None),
+                kernel_size=dur_hparams.get('kernel_size', None),
                 offset=dur_hparams['log_offset'],
                 dur_loss_type=dur_hparams['loss_type'],
                 arch=dur_hparams['arch']

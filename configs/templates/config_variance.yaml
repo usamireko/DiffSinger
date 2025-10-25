@@ -69,11 +69,7 @@ use_stretch_embed: true
 use_variance_scaling: true
 hidden_size: 384
 dur_prediction_args:
-  arch: resnet
-  hidden_size: 256
-  dropout: 0.1
-  num_layers: 5
-  kernel_size: 3
+  arch: naive
   log_offset: 1.0
   loss_type: mse
   lambda_pdur_loss: 0.3

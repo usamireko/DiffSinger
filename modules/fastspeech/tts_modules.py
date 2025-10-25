@@ -76,10 +76,10 @@ class DurationPredictor(torch.nn.Module):
         self.offset = offset
         self.conv = torch.nn.ModuleList()
         self.kernel_size = kernel_size
-        self.use_resnet = (arch == 'resnet')
+        self.arch = arch
         for idx in range(n_layers):
             in_chans = in_dims if idx == 0 else n_chans
-            if self.use_resnet:
+            if self.arch == 'resnet':                   
                 self.conv.append(nn.Sequential(
                     LayerNorm(in_chans, dim=1),
                     nn.Conv1d(in_chans, n_chans, kernel_size, stride=1, padding=kernel_size // 2),
@@ -87,7 +87,7 @@ class DurationPredictor(torch.nn.Module):
                     nn.Conv1d(n_chans, n_chans, 1),
                     nn.Dropout(dropout_rate)
                 ))
-            else:
+            elif self.arch == 'fs2':
                 self.conv.append(nn.Sequential(
                     nn.Identity(),  # this is a placeholder for ConstantPad1d which is now merged into Conv1d
                     nn.Conv1d(in_chans, n_chans, kernel_size, stride=1, padding=kernel_size // 2),
@@ -95,7 +95,7 @@ class DurationPredictor(torch.nn.Module):
                     LayerNorm(n_chans, dim=1),
                     nn.Dropout(dropout_rate)
                 ))
-        if self.use_resnet and in_dims != n_chans:
+        if self.arch == 'resnet' and in_dims != n_chans:
             self.res_conv = nn.Conv1d(in_dims, n_chans, 1)
         else:
             self.res_conv = None
@@ -110,7 +110,7 @@ class DurationPredictor(torch.nn.Module):
         #     self.crf = CRF(out_dims, batch_first=True)
         else:
             raise NotImplementedError()
-        self.linear = torch.nn.Linear(n_chans, self.out_dims)
+        self.linear = torch.nn.Linear(in_dims if len(self.conv) == 0 else n_chans, self.out_dims)
 
     def out2dur(self, xs):
         if self.loss_type in ['mse', 'huber']:
@@ -135,7 +135,7 @@ class DurationPredictor(torch.nn.Module):
         masks = 1 - x_masks.float()
         masks_ = masks[:, None, :]
         for idx, f in enumerate(self.conv):
-            if self.use_resnet:
+            if self.arch == 'resnet':
                 residual = self.res_conv(xs) if idx == 0 and self.res_conv is not None else xs
                 xs = residual + f(xs)
             else:
