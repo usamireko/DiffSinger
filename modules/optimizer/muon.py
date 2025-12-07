@@ -4,7 +4,22 @@ import torch.nn.functional as F
 from torch import Tensor
 from torch.nn import Module, Parameter, Embedding
 from typing import List
+from itertools import repeat
 from .chained_optimizer import ChainedOptimizer, OptimizerSpec
+
+coeffs_list = [
+    (8.28721201814563, -23.595886519098837, 17.300387312530933),
+    (4.107059111542203, -2.9478499167379106, 0.5448431082926601),
+    (3.9486908534822946, -2.908902115962949, 0.5518191394370137),
+    (3.3184196573706015, -2.488488024314874, 0.51004894012372),
+    (2.300652019954817, -1.6689039845747493, 0.4188073119525673),
+    (1.891301407787398, -1.2679958271945868, 0.37680408948524835),
+    (1.8750014808534479, -1.2500016453999487, 0.3750001645474248),
+    (1.875, -1.25, 0.375), # subsequent coeffs equal this numerically
+]
+
+# safety factor for numerical stability (but exclude last polynomial )
+coeffs_list = [(a / 1.01 , b / 1.01**3 , c / 1.01**5) for (a, b, c) in coeffs_list[: -1]] + [coeffs_list[-1]]
 
 
 def get_bf16_support_map():
@@ -24,7 +39,7 @@ def get_bf16_support_map():
         
     return bf16_support_map
     
-    
+
 def zeropower_via_newtonschulz5(G: Tensor, steps: int, use_bf16: bool) -> Tensor:
     """
     Newton-Schulz iteration to compute the zeroth power / orthogonalization of G. We opt to use a
@@ -36,7 +51,7 @@ def zeropower_via_newtonschulz5(G: Tensor, steps: int, use_bf16: bool) -> Tensor
     performance at all relative to UV^T, where USV^T = G is the SVD.
     """
     assert G.ndim == 3 # batched Muon implementation by @scottjmaddox, and put into practice in the record by @YouJiacheng
-    a, b, c = (3.4445, -4.7750,  2.0315)
+    #a, b, c = (3.4445, -4.7750,  2.0315)
     
     X = G.to(dtype = torch.bfloat16 if use_bf16 else torch.float32)
 
@@ -44,13 +59,14 @@ def zeropower_via_newtonschulz5(G: Tensor, steps: int, use_bf16: bool) -> Tensor
     X = F.normalize(X, p=2.0, dim=(-2, -1), eps=1e-7)
     
     # Perform the NS iterations
+    hs = coeffs_list[: steps] + list(repeat(coeffs_list[-1], steps - len(coeffs_list)))
     if X.size(-2) < X.size(-1):
-        for _ in range(steps):
+        for a, b, c in hs:
             A = torch.bmm(X, X.mT)
             A = torch.baddbmm(A, A, A, beta=b, alpha=c)
             X = torch.baddbmm(X, A, X, beta=a, alpha=1)
     else:
-        for _ in range(steps):
+        for a, b, c in hs:
             A = torch.bmm(X.mT, X)
             A = torch.baddbmm(A, A, A, beta=b, alpha=c)
             X = torch.baddbmm(X, X, A, beta=a, alpha=1)
@@ -131,8 +147,10 @@ def get_params_for_muon(model) -> List[Parameter]:
     """
     muon_params = []
     for module in model.modules():
-        for param in module.parameters(recurse=False):
+        for name, param in module.named_parameters(recurse=False):
             if not param.requires_grad:
+                continue
+            if name == 'weight_g':
                 continue
             if not isinstance(module, nn.Embedding) and param.ndim >= 2:
                 muon_params.append(param)
