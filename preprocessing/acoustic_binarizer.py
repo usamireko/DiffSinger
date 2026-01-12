@@ -40,6 +40,7 @@ ACOUSTIC_ITEM_ATTRIBUTES = [
     'tokens',
     'mel2ph',
     'f0',
+    'uv',
     'energy',
     'breathiness',
     'voicing',
@@ -152,6 +153,7 @@ class AcousticBinarizer(BaseBinarizer):
             print(f'Skipped \'{item_name}\': empty gt f0')
             return None
         processed_input['f0'] = gt_f0.astype(np.float32)
+        processed_input['uv'] = uv
 
         if self.need_energy:
             # get ground truth energy

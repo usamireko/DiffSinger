@@ -351,10 +351,10 @@ class BaseBinarizer:
             raise
 
         builder.finalize()
-        if prefix == "train":
-            extra_info.pop("names")
-            extra_info.pop('ph_texts')
-            extra_info.pop("spk_names")
+        # if prefix == "train":
+        #     extra_info.pop("names")
+        #     extra_info.pop('ph_texts')
+        #     extra_info.pop("spk_names")
         with open(self.binary_data_dir / f"{prefix}.meta", "wb") as f:
             # noinspection PyTypeChecker
             pickle.dump(extra_info, f)
