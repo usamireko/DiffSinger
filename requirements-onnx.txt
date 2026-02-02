@@ -13,7 +13,7 @@ numpy<2.0.0
 onnx~=1.16.0
 onnxsim~=0.4.36
 praat-parselmouth==0.4.3
-pyworld==0.3.4
+pyworld-prebuilt
 PyYAML
 resampy
 scipy>=1.10.0
